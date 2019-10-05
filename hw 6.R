@@ -1,0 +1,57 @@
+data1=read.csv("hw6data.csv")
+y1=ts(data1$y1, start=1988, freq=12)
+three.plot=function(y, name="y"){
+	op=par(mfrow=c(3,1), mar=c(2,4,1,0.5))
+	plot.ts(y, ylab= name)
+	acf(y)
+	pacf(y)
+	par(op)
+	} 
+three.plot(y1)
+adf.trend= ur.df(y1, type= "trend", selectlags="BIC")
+summary(adf.trend)
+time= 1:length(y1)
+time=ts(time, start=1988, freq=12)
+out1=lm(y1~time)
+out2=lm(y1~time+I(time^2))
+out3=lm(y1~time+I(time^2)+I(time^3))
+out4=lm(y1~time+I(time^2)+I(time^3)+I(time^4))
+AIC(out1,out2,out3,out4)
+BIC(out1,out2,out3,out4)
+three.plot(out3$residuals)
+adf.out3resid= ur.df(out3$resid, type= "none", selectlags="BIC")
+summary(adf.out3resid)
+
+out.ar2=arima(y1, order=c(2,0,0), xreg=cbind(time, time^2, time^3))
+out.ar3=arima(y1, order=c(3,0,0), xreg=cbind(time, time^2, time^3))
+out.arma=arima(y1, order=c(1,0,1), xreg=cbind(time, time^2, time^3))
+AIC(out.ar2,out.ar3,out.arma)
+BIC(out.ar2,out.ar3,out.arma)
+
+time2=(1:36)+length(y1)
+yfcst=predict(out.ar3,n.ahead=36, newxreg=cbind(time2, time2^2, time2^3))
+yfcst=yfcst$pred
+two=ts.union(y1,yfcst, dfram=TRUE)
+plot(two[,1], ylim=c(min(y1),max(yfcst)))
+lines(two[,2], col=2)
+legend("topleft", legend= c("Actual", "Forecast"), col= c("black", "red"), lty=1)
+
+dy=diff(y1)
+three.plot(dy)
+adf.dy= ur.df(dy, type= "none", selectlags="BIC")
+summary(adf.dy)
+
+out.ar3=arima(y1, order=c(3,1,0), xreg=cbind(time, time^2, time^3))
+out.arma=arima(y1, order=c(1,1,1), xreg=cbind(time, time^2, time^3))
+out.ma6=arima(y1, order=c(0,1,6), xreg=cbind(time, time^2, time^3))
+AIC(out.ar3,out.ma6,out.arma)
+BIC(out.ar3,out.ma6,out.arma)
+
+time2=(1:36)+length(y1)
+yfcst=predict(out.arma,n.ahead=36, newxreg=cbind(time2, time2^2, time2^3))
+yfcst=yfcst$pred
+two=ts.union(y1,yfcst, dfram=TRUE)
+plot(two[,1], ylim=c(min(y1),max(yfcst)))
+lines(two[,2], col=2)
+legend("topleft", legend= c("Actual", "Forecast"), col= c("black", "red"), lty=1)
+
