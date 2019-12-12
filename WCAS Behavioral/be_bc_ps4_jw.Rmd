@@ -1,0 +1,404 @@
+---
+title: "Problem Set 4"
+subtitle: "Behavioral Economics, Boston College"
+date: "Fall 2019"
+author: James Williams
+output:
+  html_document:
+  theme: lumen
+highlight: pygment
+number_sections: TRUE
+---
+  
+<p style="color:red">
+*The assignment is worth **100 points**. There are ** 16 questions**. You should have the following packages installed:*
+</p>
+
+```{r setup, results='hide', message=FALSE, warning=FALSE}
+library(tidyverse)
+library(cowplot)
+library(kableExtra)
+library(margins)
+```
+
+You may need to update your version of R and follow these steps to download [`margins`](https://github.com/leeper/margins):
+
+```{r,eval=F}
+if (!require("remotes")) {
+  install.packages("remotes")
+  library("remotes")
+}
+install_github("leeper/prediction")
+install_github("leeper/margins")
+```
+
+In this problem set you will summarize the paper ["Imperfect Public Monitoring with Costly Punishment: An Experimental Study"](https://www.aeaweb.org/articles?id=10.1257/aer.102.7.3317) (Ambrus and Greiner, AER 2012) and recreate some of its findings. 
+
+
+# Big picture
+
+**1. What is the main question asked in this paper?**
+
+The main question this paper proposes is 'What are the effects on cooperation and social welfare in long, finitely repeated public good and contribution games, when there is the option to exercise a costly punishment on individuals who don't participate or comply. 
+
+**2. Summarize the experiment design.**
+
+Subjects were randomly grouped into teams of three. These groups remained together over the 50 rounds of the experiment. The experiment is structured with six treatments, with two dimensions. There are three categories for punishment options: none, regular, and strong punishments. For the noise category there are two options: no information about group members contributions, or a small amount of noise with respect to group members contributions. At the beginning of each round, each group member is given 20 tokens. They are allowed to contribute all of none of the tokens in a round. If the tokens were contributed, each team member benefited by receiving 10 points (20/2). If they did not contribute the tokens, they themselves received 20 points. All group members contributed simultaneously each of the 50 rounds. 
+
+At the end of each round, groups that were subjected to the noise treatment were informed of the choices in their group. The groups in the small noise treatment were shown a 'public record' of each group member's choice. Additionally there was a probability of .1 for the public record to display a false negative with respect to contribution. Groups that were subjected to the no punishment treatment began the next round once the information of choices were shown. Groups subjected to the the punishment treatments participated in a second step before moving to the next round. In this step, they could inflict punishment on group members who did not contribute. Every unit of punishment assigned to a group member reduced the member assigning it by 1 point. The unit of punishment in the regular punishment group was =3, and in the strong punishment group =5.
+
+The experiment was conducted in a laboratory setting using computers. These stations were separated by dividers so no subjects could communicate. Written questions would be answered by the test administrators. At the end of the experiment they were endowed with the cash that they won. Subjects received AU$.02* their cumulative points. On average participants received AU 28.94, with a SD of AU 5.31. Subjects were also endowed a sign-up fee of AU 5
+  
+**3. Summarize the main results of the experiment.** 
+The first finding from the experiment is that groups subjected to the noise treatment saw lower contributions in all punishment treatments, but was only significant for groups within the strong punishment treatment. The next significant result is that contributions increased across punishment treatments, and all of these findings were statistically significant. Furthermore, it was found that the severity of punishment decreases the number of these points assigned in the experiment, but this finding was only significant within groups subjected to the noise treatment. Additionally, regular and strong punishment occurred more frequently when the groups were subjected to noise, rather than no noise. Finally, there was no significant finding in the relationship of subject's net payoffs when subjected to noise and no punishment, but decreases net payoffs when both regular and strong punishment options are in play. Subjects who were part of the no noise treatment only saw a significant increase in net payoffs when subjected to strong punishment versus no punishment. There was no significant difference between subjects in the no noise treatment who were subjected to weak or strong punishments. Subjects exposed to noise and regular punishment saw a significant decrease in net income compared to strong punishment, and a non significant decrease compared to no punishment. in summation, it seems that in perfect monitoring in a public good contribution setting, increasing punishment severity does not convincingly increase average net payoffs. 
+
+**4. Why are these results valuable? What have we learned? Motivate your discussion with a real-world example. In particular discuss the trade offs to transparency in groups and how these trade offs might be navigated in a firm, or more broadly, a society.**
+These results are valuable because it gives us some insight into how people would be willing to contribute to a public good, and what may crowd out their public donation. As discussed in the results section above, there is no discernible relationship between punishment severity and average net payoffs. this means threat of punishment, or even punishment in practice will not motivate people to participate. Furthermore the presence of noise seems to complicate matters even more so, with subjects in noise seeing lower average contributions, and higher punishment rates. The idea of transparency within a group in a public goods game seems to crowd in more contributions. If everyone was perfectly aware of who was donating how much, there would be more pressure to donate the social optimum as more and more people began to do so. In short, fear of being a free rider, or seen as selfish would ultimately crowd in free riders in a perfectly transparent public good game. 
+
+**5. If punishment is ineffective under imperfect monitoring, what else can you lean on to ensure people cooperate (at least a little) in a public goods problem?**
+The primary way to ensure cooperation in imperfect monitoring is to crowd in individuals to donating to the public good, by preying on altruism or fear of deviating for the status quo. An example of both of these can be seen in environmental policy. Specifically the removal of plastic bags as the primary option of grocery stores and bodegas. Initially, the legislation was passed by manipulating society's altruism. Campaigns about preserving beach terrain and wildlife by the reduction of plastic bag pollution was sufficient to crowd in enough of the population to pass legislation. Next, by alienating the use of plastic bags, individuals who elect to use them at checkout are societal outliers, which is where most people do not want to be. Thus, those who may not have agreed with the initial legislation will conform and use paper, or bring their own reusable shopping bags, to not be societal outliers. 
+
+# Theory
+
+**Payoffs to agent $i$ are**
+
+$$
+\pi_i = (e_i - x_i) + \alpha \sum_{i=1}^n x_i
+$$
+**where $e_i$ is the agent's endowment, $x_i$ is her contribution to the public good, $\alpha$ is the marginal per capita return, and $n$ is the group size.**
+
+**5. Explain $\alpha$ and why in public goods game requires $\frac{1}{n} < \alpha < 1$.**
+
+Alpha is the marginal per capital return of individuals contributing to a public good. The reason $\alpha$ is <1 is because it is the rate of return or for every 1 dollar contributed to a public good. The reason $\frac{1}{n} < \alpha$ is because this rate of return needs to be distributed over all of the members of the group, whether or not they contributed to the public good. 
+
+**6. Suppose $e_i = e = 20$ (i.e. everyone has 20), $\alpha = 0.4$ and $n=4$. Show that $x_i = 0$ is a symmetric Nash equilibrium, but $x_i=20$ is the social optimum. (Recall that in a Nash equilibrium $i$ cannot increase her payoff by changing her contribution.)**
+
+The Nash equilibrium is  $x_i = 0$ because it is in each individuals best interest to free ride off of others contributions. If players 1-3 all contribute their entire $20 but player 4 does not, then player 4 would not only receive the benefit of the donations of others towards the public good, but he would retain his initial 20. Since it is the Nash equilibrium to not donate anything on the individual level, the social optimum is for everyone to donate everything. In this case, with a donation total of 20, a player receives:
+
+$$
+\pi=(20-20)+(\alpha*20)= 8 
+$$
+
+The figure below represents how increases in the total donation to the public group decrease individual payoffs. 
+
+```{r}
+pi<- function(x,y,e=20,alpha=.4){
+  private=e-x
+  tot_contrib=x+y
+  pay_pg=alpha*tot_contrib
+  pay_me=private+pay_pg
+  return(pay_me)
+}
+curve(pi(x,y=3*20),from = 0,to= 20)
+```
+
+
+# Replication
+
+## Description
+
+<p style="color:red">
+*Use `theme_classic()` for all plots.*
+<p style="color:red">
+
+**7. Recreate Table 1 and use [`kable()`](https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html) to make a publication-quality table (in HTML).**
+
+First I am going to add columns for the two treatment types as names that are not coded. So for noise I will change all 0's to No Noise, and 1s to Noise. For Punishment type, I am going to create a column that changes all 1s in p_reg to Regular Punishment, all 1s in p_strong to Strong Punishment, and 0s in p_strong to No Punishment. I decided to do this to make the tables more professional, rather than grouping by the provided columns of treatment and noise which had encoded factor names, and 1s and 0s
+
+```{r}
+df=read_csv('ps4_data.csv')
+df<- df %>% 
+  mutate(p_treat=if_else(p_reg==1, 'Regular Punishment', ifelse(p_strong==1, 'Strong Punishment', 'No Punishment'))) %>% 
+  mutate(noise_treat= ifelse(noise==0,'No Noise','Noise'))
+ 
+df2<- 
+  df%>% 
+  group_by(noise_treat,p_treat) %>%
+  summarise(N_participants= length(subject)/50, Avg_contribution=round(mean(contribution), digits = 2), Avg_punishmnet=round(mean(received_punishment), digits = 2), Avg_net_profit=round(mean(income), digits=2))
+
+df_kable<- 
+   kable(df2, align = 'c') %>% 
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed"),full_width = TRUE) %>% 
+   collapse_rows(columns=1, valign='top')
+df_kable
+```
+
+
+
+
+  
+**8. Recreate Figure 1.**
+
+```{r}
+fig1= 
+  df %>% 
+  mutate(noise= ifelse(noise==0,'No Noise','Noise')) %>%
+  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
+  select(noise,round_fct, p_treat, contribution) %>% 
+  group_by(round_fct, p_treat ,noise) %>% 
+  summarize(contrib=mean(contribution))%>% 
+  ggplot(.,aes(x=round_fct, y=contrib, group=p_treat, shape=p_treat, color=p_treat)) +
+  geom_line()+
+  geom_point()+
+  facet_grid(cols = vars(noise))+
+  labs(caption='Fig 1. Contributions Over Time')+
+  scale_y_continuous(breaks=c(0,2,4,6,8,10,12,14,16,18,20),limits=c(0,20))+
+  theme(
+  plot.caption =element_text(hjust = .5, size=12, face = 'bold'),
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  legend.position="bottom")
+fig1
+```
+
+**9. Recreate Figure 2.**
+
+```{r}
+fig2<-
+  df %>% 
+  mutate(noise= ifelse(noise==0,'No Noise','Noise')) %>%
+  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
+  select(noise,round_fct, p_treat, income) %>% 
+  group_by(round_fct, p_treat ,noise) %>% 
+  summarize(net_profit=mean(income))%>% 
+  ggplot(.,aes(x=round_fct, y=net_profit, group=p_treat, shape=p_treat, color=p_treat))+
+  geom_point() +
+  geom_line()+
+  facet_grid(cols = vars(noise))+
+  labs(caption='Fig 2. Net Profits Over Time')+
+  scale_y_continuous(breaks=c(16,18,20,22,24,26,28,30),limits=c(15,30))+
+  theme(
+  plot.caption =element_text(hjust = .5, size=12, face = 'bold'),
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  legend.position="bottom")
+fig2
+```
+
+**10. Recreate Figure 4.**
+
+```{r}
+df<-df %>%
+  mutate(group_cntrb=(ifelse(sum_group_contributions==0, 'No contribution', 
+                                      ifelse(sum_group_contributions==60, "All contribute", 'Some contribute'))))
+df$group_cntrb = factor(df$group_cntrb,levels=c("All contribute", 'Some contribute','No contribution'))
+
+pun_no_noise_area<- 
+  df %>% 
+  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
+  group_by(noise_treat, round_fct, group_cntrb,p_treat) %>% 
+  filter(treat=='pun_nonoise') %>% 
+  summarise(n_groups=n()) %>% 
+  summarise(n=sum(n_groups)) %>% 
+  mutate(percent=n/sum(n)) %>% 
+  ggplot(., aes(x=round_fct, y=percent,group=group_cntrb,fill=group_cntrb))+
+  geom_area()+
+  ggtitle('Punishmnet, no noise')+
+  labs(x='Period',y='Share')+
+  scale_y_continuous(breaks=c(0,.2,.4,.6,.8,1),limits=c(0,1))+
+  theme_classic()
+
+pun_noise_area<- 
+  df %>% 
+  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
+  group_by(noise_treat, round_fct, group_cntrb,p_treat) %>% 
+  filter(treat=='pun_noise') %>% 
+  summarise(n_groups=n()) %>% 
+  summarise(n=sum(n_groups)) %>% 
+  mutate(percent=n/sum(n)) %>% 
+  ggplot(., aes(x=round_fct, y=percent,group=group_cntrb,fill=group_cntrb))+
+  geom_area()+
+  ggtitle('Punishmnet, noise')+
+  labs(x='Period',y='Share')+
+  scale_y_continuous(breaks=c(0,.2,.4,.6,.8,1),limits=c(0,1))+
+  theme_classic()
+
+strg_pun_no_noise_area<- 
+  df %>% 
+  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
+  group_by(noise_treat, round_fct, group_cntrb,p_treat) %>% 
+  filter(treat=='strongpun_nonoise') %>%
+  summarise(n_groups=n()) %>% 
+  summarise(n=sum(n_groups)) %>% 
+  mutate(percent=n/sum(n)) %>% 
+  ggplot(., aes(x=round_fct, y=percent,group=group_cntrb,fill=group_cntrb))+
+  geom_area()+
+  ggtitle('Strong Punishmnet, no noise')+
+  labs(x='Period',y='Share')+
+  scale_y_continuous(breaks=c(0,.2,.4,.6,.8,1),limits=c(0,1))+
+  theme_classic()
+
+strg_pun_noise_area<- 
+  df %>% 
+  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
+  group_by(noise_treat, round_fct, group_cntrb,p_treat) %>% 
+  filter(treat=='strongpun_noise') %>%
+  summarise(n_groups=n()) %>% 
+  summarise(n=sum(n_groups)) %>% 
+  mutate(percent=n/sum(n)) %>% 
+  ggplot(., aes(x=round_fct, y=percent,group=group_cntrb,fill=group_cntrb))+
+  geom_area()+
+  ggtitle('Strong Punishmnet, noise')+
+  labs(x='Period',y='Share')+
+  scale_y_continuous(breaks=c(0,.2,.4,.6,.8,1),limits=c(0,1))+
+  theme_classic()
+
+pun_no_noise_line<- 
+  df %>% 
+  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
+  group_by(noise_treat, round_fct, group_cntrb,treat) %>% 
+  filter(treat=='pun_noise') %>%
+  summarise(punish=mean(income_reduction)) %>% 
+  ggplot(., aes(x=round_fct, y=punish,group=group_cntrb))+
+  geom_line()+
+  labs(x='Period',y='Punishment')+
+  scale_y_continuous(breaks=c(0,.5,1,1.5,2,2.5),limits=c(0,2.5))
+
+
+par(mfrow = c(1, 4))
+pun_no_noise_area
+pun_noise_area
+strg_pun_no_noise_area
+strg_pun_noise_area
+
+```
+
+
+## Inference
+
+**Consider the linear model**
+
+$$
+y = \alpha + \beta_1 x_1 + \beta_2 x_2 + \varepsilon
+$$
+
+**11. Write down the marginal effect of $x_1$.**
+$\frac{\partial y}{\partial x_1} = \beta_1*F^\prime(x)$ 
+
+In other words, $x_1$ increases $y$ by a factor of $\beta_1$. 
+
+**Now suppose you have a non-linear model**
+
+$$
+y = F(\alpha + \beta_1 x_1 + \beta_2 x_2 + \varepsilon)
+$$
+
+**where $F(\cdot)$ is a "link function" that compresses the inputs so that the output $\hat{y} \in [0,1]$.**
+
+
+**12. Write down the marginal effect of $x_1$. How does this compare to the marginal effect in the linear model?**
+
+The function above is really two functions. This is depicted below. 
+
+$$
+g=\alpha + \beta_1 x_1 + \beta_2 x_2 + \varepsilon
+$$
+$$
+y=F(g)
+$$
+Therefore, using the chain rule we can derive $\frac{\partial y}{\partial x_1} = \frac{\partial g}{\partial x_1} * \frac{\partial y}{\partial g}$ :
+
+$$
+\frac{\partial y}{\partial x_1} = \beta_1*F^\prime(x)
+$$ 
+ 
+ Unlike the standard linear model, because the probit model is a composite function, any change in the inner function (linear model) will not be the only thing that will cause $y$ to change. Because of the chain rule changes in $y$ are influenced by how $x_1$ affects the linear model, and the link function which is what causes the two functions to be a composite function. 
+
+**13. A probit model uses the Normal CDF $\Phi$ as the link function, where $\Phi' = \phi$ is the Normal PDF. Use `glm()` to estimate Model 1 in Table 2 (remember to cluster the standard errors at the group level). Assign the model to the object `m1`. Use `summary()` to view the coefficients. Interpret the coefficients. (For more on the probit model, see the appendix.)**
+
+```{r}
+require(sandwich)
+m1 <- glm(contr_dummy~round+p_reg+p_strong+noise+noise__p_reg+noise__p_strong-1, data = df, family=binomial(link="probit"))#removed intercept since it was not in Table 2
+summary(m1)
+vcov_group<- sandwich::vcovCL(m1,cluster = df$group)
+lmtest::coeftest(m1, vcov_group)
+```
+
+
+**14. Table 2 reports the average marginal effects (AMEs) of the variables on $P(\text{contribute})$. Calculate the AME to the variable `round` as follows:**
+
+1. **Use [`predict()`](https://www.rdocumentation.org/packages/stats/versions/3.6.1/topics/predict)to create an object `predictions` that contains the predicted z-scores. (i.e.    
+$$\hat{\mathbf{X}\beta}$$. Hint: use the option `type="link"` in `predict()`.)** 
+
+```{r}
+preds= predict(m1, df, type='link')
+```
+
+2. **Use [`dnorm()`](https://www.r-bloggers.com/normal-distribution-functions/) to calculate the probabilities of the predicted z-scores and store the output in an object called `index`.**
+
+```{r}
+index<-dnorm(preds, mean=0,sd=1)
+```
+
+3. **Now calculate the marginal effects by multiplying the predicted probabilities times the estimated coefficient for `round` and store the output in `dydxround`.**
+
+```{r}
+dxdyrnd=index*-.008
+```
+
+4. **Use `mean()` to calculate the AME.**
+
+```{r}
+mean(dxdyrnd)
+```
+
+
+**15. Verify your calculations with `margins()`, the plot the AMEs. (Note: these will not be exactly the same as those in the paper, since the paper uses an outdated method in Stata.**
+
+```{r}
+m<- margins(m1)
+m
+plot(m)
+```
+
+**16. Interpret the AMEs.** 
+AME's are the true 'slope coefficient' in a probit model. The literal regression coefficients represent the change in each variables z-score. When these Z scores are subjected to the link function in the model, their p-values are observed, and multiplied by the respective regression coefficient. By the chain rule, the AMEs that are calculated represent the percent change in the probability of contributing. As rounds increase, there is a 2% decrease in the probability to contribute. If subjects are part of the regular or strong punishment group, there is a 17% and 44% increase in the respective probability of contributing. If individuals are subjected to noise, there is a 19% decrease in the probability of contributing. Finally, the interactive dummies of noise and regular and strong punishment have a respective 8% and 9% increase in the probability of contributing.  
+
+# Appendix: the probit model
+
+Suppose we have latent response variable 
+
+$y^* = \mathbf{X}\beta + \varepsilon$ 
+
+where $\mathbf{X}$ is a $k \times 1$ vector of features $[x_1 \; x_2 \; \dots \; x_k]$ and $\beta$ is a $1 \times k$ coefficient vector. 
+
+The observable binary variable $y$ is defined as 
+$$
+\begin{align*}
+y &= 1 \quad \text{if} \quad  y^* > 0 \\
+y &= 0 \quad \text{if} \quad  y^* \leq 0 \\
+\end{align*}
+$$
+If we assume that $\varepsilon \sim N(0,1)$ then 
+
+$$
+\begin{align*}
+P(y^* > 0)  &= P(\mathbf{X}\beta + \varepsilon > 0)\\
+            &= P(\varepsilon > -\mathbf{X}\beta)\\
+            &= P(\varepsilon < \mathbf{X}\beta) \quad \text{By symmetry of standard normal}\\
+            &= \Phi(\mathbf{X}\beta)
+\end{align*}
+$$
+
+So $\mathbf{X}\beta$ are z-scores:
+
+$$
+\begin{align*}
+P(y = 1) &= P(y^* > 0) = \Phi(z \leq \mathbf{X}\beta)\\
+P(y = 0) &= P(y^* \leq 0) = 1 - \Phi(z \leq \mathbf{X}\beta)
+\end{align*}
+$$
+where $\Phi$ is the Standard Normal CDF (e.g. $\Phi(0) = 0.5$; half the standard normal distribution lies below $\mu = 0$). 
+
+If we relax the assumption that the error is standard Normal and instead allow it be $\varepsilon \sim N(0, \sigma^2)$, then 
+
+$$
+\begin{align*}
+P(y^* > 0)  &= P(\mathbf{X}\beta + \varepsilon > 0)\\
+            &= P(\frac{\varepsilon}{\sigma} > \frac{-\mathbf{X}\beta}{\sigma})\\
+            &= P(\frac{\varepsilon}{\sigma} < \frac{\mathbf{X}\beta}{\sigma}) \\
+            &= \Phi(\frac{\mathbf{X}\beta}{\sigma})
+\end{align*}
+$$
+but we cannot estimate $\beta$ and $\sigma$ separately since the probability depends exclusively on their ratio. The standard approach is assume $\sigma = 1$ so $\varepsilon$ is a standard normal. 
+
