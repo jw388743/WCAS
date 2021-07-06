@@ -1,0 +1,160 @@
+---
+title: "JW Week 3 Discussion ADEC746001"
+author: "James Williams"
+date: "7/22/2020"
+output: html_document
+---
+The objective of this week's discussion is to build and ARIMA model and an ETS model, and compare the forecasts. The data I will use comes from the fpp2 package. It is a time series with a monthly period that details total expenditures on restraint, cafe, and takeout interactions. Let's look at the series. 
+
+```{r}
+library(fpp2)
+auscafe
+```
+
+As can be seen, it is a monthly time series, that begins in 1982-04, and ends on 2017-09. Let's plot this series and several of its decomposition. 
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(fpp2)
+library(scales)
+my_ts_plot <-
+  function(data, plt_name, y_axis){
+    autoplot(data)+
+      labs(title = plt_name, y = y_axis)
+  }
+
+my_ts_plot(auscafe, "Austrailian Dining Out 1982-04 to 2017-09",
+            "Billions") +
+  scale_x_continuous(limits = c(1982, 2017), breaks = c(1982, 1990, 2000, 2010, 2017))
+```
+
+So this series clearly has an increasing trend, and some elements of seasonality. Let's plot some decomposition to get a sense of these in separate components. 
+
+```{r message=FALSE, warning=FALSE}
+autoplot(decompose(auscafe, "a")) + 
+  ggtitle("Additive Decomposition")
+
+autoplot(decompose(auscafe, "m")) + 
+  ggtitle("Multiplicative Decomposition")
+
+```
+
+Both series seem to retain elements of the seasonality in the remainder component. I think the additive  of it in the middle of the series, but at the beginning and end it is still very apparent. Let's see if more sophisticated method of decomposition do a better job with this. 
+
+```{r message=FALSE, warning=FALSE}
+library(seasonal)
+auscafe %>% 
+ stl(t.window=13, s.window="periodic", robust=TRUE) %>%
+  autoplot() +
+  ggtitle("STL Decomposition")
+
+auscafe %>% 
+  seas(x11 = "") %>%
+  autoplot() +
+  ggtitle("X11 Decomposition")
+```
+
+STL nearly removes all of the seasonal component in the remainder, up until the end. X11 removes more of it than the standard decomposition, but is still present. We clearly have a series that is highly seasonal. We will probably need to account for that in modeling. 
+
+We will now split the series into a test set and a training set. The training set will span from 1982 - 2009. The test set will span from 2010-2017 
+
+
+```{r}
+train <- window(auscafe, end = c(2009, 12))
+
+test <- window(auscafe, start = c(2010, 1))
+
+```
+
+Ok so we have been tasked with training an ETS model, and an ARIMA model using auto.arima. Let's fit the ETS models first with the training set, and select the best one based on performance metrics.  ETS is an acronym for for (Error, Trend, Seasonal). This label can also be thought of as ExponenTial Smoothing. They are a type of exponential smoothing.  Forecasts produced using exponential smoothing methods are weighted averages of past observations, with the weights decaying exponentially as the observations get older. In other words, the more recent the observation the higher the associated weight.
+
+The ETS models I will test are "ZZZ", which is auto selected, "ANN" is simple exponential smoothing with additive errors,  "MNN" is simple exponential smoothing with multiplicative errors, "MAM" is multiplicative Holt-Winters' method with multiplicative errors, and "MAN" Holt’s linear method with multiplicative errors. 
+
+```{r message=FALSE, warning=FALSE}
+library(kableExtra)
+ets_model_types <- c("ZZZ", "ANN", "MNN", "MAM", "MAN")
+
+ts_model_list <- lapply(setNames(unique(ets_model_types), 
+                                  unique(ets_model_types)),
+                         
+                         function(x){
+                           
+                           model <- ets(y = train, model = x)
+                           
+                           fcsts <- forecast(model, h = 32)
+                           
+                           eval_metrics <-
+                             accuracy(object = fcsts,
+                                      x = test)
+                           return(eval_metrics)
+                           
+                         })
+
+kable(ts_model_list[["ZZZ"]], caption = "ZZZ")
+kable(ts_model_list[["ANN"]], caption = "ANN")
+kable(ts_model_list[["MNN"]], caption = "MNN")
+kable(ts_model_list[["MAM"]], caption = "MAM")
+kable(ts_model_list[["MAN"]], caption = "MAN")
+
+```
+
+It looks like the "MAM" model performs best. Let's fit that model and compare to the ARIMA model we will also generate. 
+
+```{r}
+myETS <- ets(train, "MAM")
+
+myARIMA <- auto.arima(train)
+
+fcts_ets <- forecast(myETS, h = length(test))
+
+fcts_arima <- forecast(myARIMA, h = length(test))
+
+kable(accuracy(fcts_arima, test), caption = "ARIMA Performence")
+
+kable(accuracy(fcts_ets, test), caption = "MAM Performence")
+
+print(summary(myARIMA)) 
+print(summary(myETS))
+```
+
+It would appear that in terms of model performance metrics, the "MAM" model has a slight edge over the ARIMA model. The order of the ARIMA generated is (2,1,3), with a monthly seasonal component order of (0,1,1). 
+
+Let's plot residuals and forecast errors of the models. 
+
+```{r message=FALSE, warning=FALSE}
+
+hist(myETS$residuals, col = "grey", main = "MAM ETS Resiuals", xlab = "Residuals")
+
+hist(myARIMA$residuals, col = "grey", main = "ARIMA(2,1,3)(0,1,1)[12] Resiuals",
+     xlab = "Residuals")
+
+cbind('Residuals' = residuals(myETS),
+      'Forecast errors' = residuals(myETS,type='response')) %>%
+  autoplot(facet=TRUE) + xlab("Year") + ylab("") + 
+  ggtitle("Residuals and Forecast Errors From MAM ETS")
+
+cbind('Residuals' = residuals(myARIMA),
+      'Forecast errors' = residuals(myARIMA,type='response')) %>%
+  autoplot(facet=TRUE) + xlab("Year") + ylab("") + 
+  ggtitle("Residuals and Forecast Errors From ARIMA(2,1,3)(0,1,1)[12]")
+
+```
+
+It would appear that the ARIMA residuals are much more normally distributed than the "MAM" residuals. The plots of the forecast error and residuals both resemble white noise. It should be noted the forecast errors and residuals get larger later in the ARIMA model. It could  be the case that the later forecasts are overestimated from the model relying to heavily on trend. 
+
+Finally, let's plot the forecasts against the the test series.  
+
+
+```{r}
+autoplot(test) +
+  autolayer(fcts_ets, series = "Forecasts", PI = F)+
+  ggtitle("Forecasts of 'MAM' Against Observed Values") + 
+  ylab("Billions")
+
+autoplot(test) +
+  autolayer(fcts_arima, series = "Forecasts", PI = F)+
+  ggtitle("Forecasts of ARIMA(2,1,3)(0,1,1)[12] Against Observed Values") + 
+  ylab("Billions")
+```
+
+These plots are very informative, clearly indicating that the "MAM" model performs better. The forecasts nearly over lap in this model. The ARIMA model seems to have relied more heavily on the increasing trend, as it over forecasts the test series by a good amount, and especially later in the series. 

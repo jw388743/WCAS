@@ -1,0 +1,160 @@
+---
+title: "ADEC 746001 Week 1 Discussion"
+author: "James Williams"
+date: "7/1/2020"
+output: html_document
+---
+
+My last name is Williams, so I decided to use the the Walmart Inc. (WMT) adjusted closing price for the stock I will attempt to forecast. Let's see what the structure of the data I downloaded from
+**[here](https://finance.yahoo.com/quote/WMT/history/)** looks like.
+
+```{r}
+df <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/WMT.csv")
+str(df)
+```
+
+Now let's assign the Date var class as 'Date' for the sake of that is what it actually is. After that is accomplished, We are going to want to figure out when the start/ end dates of this data are, and the length of the dataset so we can get a better understanding of the frequency we are dealing with is WRT to time. We can also load some packages we are going to need moving forward as well. 
+
+```{r}
+library(lubridate)
+library(ggplot2)
+library(forecast)
+library(dplyr)
+```
+
+```{r}
+df$Date <- as.Date(df$Date)
+
+print(paste(
+  "This Data contains",
+  length(df$Date),
+  "observations",
+  sep = " ")
+  )
+
+print(paste(
+  "The first date in the data is",
+  head(df$Date, 1), 
+  "and the last date is",
+  tail(df$Date, 1),
+  sep = " ")
+)
+
+```
+
+So we have 252 observations, for roughly a year's worth of data. Cool. Clearly we are missing some days of the week. Those must be holidays / weekends. Let's see what days of the week comprise this data. 
+
+```{r}
+table(weekdays(df$Date), useNA = "a")
+```
+
+Are there difference in the means of the Adjusted Closing price of the WMT stock? 
+
+```{r}
+df %>% 
+  mutate(Weekday = weekdays(Date)) %>% 
+  group_by(Weekday) %>% 
+  summarise(Mean_Adj.Close = mean(Adj.Close))
+```
+
+Probably not enough variation here worth stat testing among the groups. that's OK. Let's visualize our data. We are going to make it a ts object. In order to do that, we need to know
+
+1. What the frequency of time we are dealing w/ Stocks are traded daily, so 365. 
+2. What day of the calendar year (out of 365). We could count on our fingers for this, but R can do it for us
+
+```{r}
+close_price_ts <- ts(df$Adj.Close,
+                     start = c(2019, 
+                             as.numeric(format(as.Date("2019-07-01"), "%j"))),
+                     frequency = 365)
+
+## How to know what day of year date x is
+
+print(as.numeric(format(as.Date("2019-07-01"), "%j")))
+
+```
+
+Now that we have our data stored as a ts object, let's plot:
+
+* The distribution of the adjusted closing price
+* The adjusted closing price over time. 
+
+```{r}
+ggplot(df, aes(x = Adj.Close)) +
+  geom_histogram()+
+  xlab("WMT Adjusted Closing Price Distribution")+
+  ylab("Frequency")+
+  ggthemes::theme_economist()
+```
+
+Now lets plot the trend.
+
+```{r}
+ggplot(df, aes(x =as.POSIXct(Date) , y = Adj.Close)) +
+  geom_line() +
+  xlab("Day") +
+  ylab("Adjusted Closing Price $") +
+  ggtitle("WMT Daily Adjusted Closing Price NYSE") +
+  ggthemes::theme_economist()
+```
+
+Let's split the data into two sets, the data that will  be used to train out model i.e. the training set, and the set used to test our predictions, i.e. the testing set. 
+
+```{r}
+train_ts <- window(close_price_ts, end = c(2020, 16))
+
+test_ts <- window(close_price_ts, start = c(2020, 17))
+
+print(paste("There are",
+            length(train_ts),
+            "observations in the training set",
+            sep = " "))
+
+print(paste("There are",
+            length(test_ts),
+            "observations in the testing set",
+            sep = " "))
+```
+
+Now, let's fit our linear model of the training set against the trend, and see what our results yield 
+
+```{r}
+x <- tslm(train_ts ~ trend)
+
+print(summary(x))
+
+x_forecasts <- forecast(x, h = 52)
+
+print(accuracy(x_forecasts, test_ts))
+```
+
+So we have some reasonable metrics WRT to accuracy. Clearly there is some sort of variation we are missing in explaining the training set, since the $$R^2$$ is only 0.20. Let's see how the residuals are distributed. 
+```{r}
+ hist(x$residuals, col = "blue")
+
+```
+
+There is a bit of a left-skew present, like I said, earlier, there is clearly some variation in the Adjusted Closing price that our model does not account for. 
+
+Finally, let's plot our forecasts
+
+```{r}
+autoplot(x_forecasts)+
+  ylab("WMT Adjusted Closing Price $")
+```
+
+
+Now lets forecast the next 30 days in the data.
+
+```{r}
+x2 <- tslm(close_price_ts ~ trend)
+
+x2_forecasts <- forecast(x2, h = 30)
+
+autoplot(x2_forecasts)+
+  ylab("WMT Adjusted Closing Price $")
+```
+
+
+
+

@@ -1,0 +1,60 @@
+---
+title: "Week 2 Discussion JW"
+author: "James Williams"
+date: "7/8/2020"
+output: html_document
+---
+
+For the week two discussion, I had a bit of trouble with the data in the link provided, so I found my own. I got it here **[here](https://new.censusatschool.org.nz/resource/time-series-data-sets-2013/)** I decided to try to forecast air travelers arriving to New Zeland. The time period in the data is from is from: 
+```{r}
+df <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/NZAirPassengers.csv")
+
+print(paste("The first observation occurs on", head(df$DATE, 1)))
+print(paste("The last observation occurs on", tail(df$DATE,1)))
+str(df)
+```
+So 1/1/200 - 11/1/2012. Cool. Let's make a ts and plot. As stated prior, I am interested in passengers arriving to NZ in this time period. 
+
+```{r}
+library(ggplot2)
+library(forecast)
+arrivals <- ts(df$Arrivals, start = c(2000, 1), end = c(2012,10), frequency = 12)
+autoplot(arrivals)+
+  scale_x_continuous(breaks=seq(2000, 2012, 1)) +
+  ggthemes::theme_calc()
+```
+
+So We see an upward trend. There is some components of seasonality where towards the middle parts of the year arrivals dips, comes back up, and dips again. In the beginning it spikes sharply. Let's decompose this series using both additive decomposition. The default setting for the \code{decompose} function is additive.
+
+```{r}
+autoplot(decompose(arrivals)) +
+  ggtitle("Addative Decomp of NZ Air Passenger Arrivals")
+```
+
+Now let's use the multiplicative decomposition.
+
+```{r}
+autoplot(decompose(arrivals, type = "multi")) +
+           ggtitle("Multi Decomp of NZ Air Passenger Arrivals")
+```
+
+There is really not much of a difference here. The plot's are all pretty much the same. Noticeably, the random plot did not really get more random between either. Let's use the additive series. We will use STL decomposition. Per the documentation of the function in the forecasts package, "STL Forecasts of STL objects are obtained by applying a non-seasonal forecasting method to the seasonally adjusted data and re-seasonalizing using the last year of the seasonal component." Let's plot this decomposition as compared to the other two to see if its decomposition does a better job with the random component, and the seasonal component variation. Not really going to play around with the params. Then plot the season a
+
+```{r}
+
+autoplot(stl(arrivals, s.window = "periodic")) +
+  ggtitle("STL Decomp of NZ Air Passenger Arrivals")
+
+```
+
+No change. Let's just use the additive method for simplicity's sake. we are going to fit it, the forecast out another two years using \code{stlf} which will decompose the time series using STL, forecast the seasonally adjusted series, and return the reseasonalised forecasts.. 
+
+
+```{r}
+arr_preds <- stlf(arrivals, method='naive', h = 24)
+autoplot(arr_preds)
+
+```
+
+
+

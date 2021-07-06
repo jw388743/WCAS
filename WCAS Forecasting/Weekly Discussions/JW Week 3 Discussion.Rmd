@@ -1,0 +1,192 @@
+---
+title: "Week 3 Discussion"
+author: "James Williams"
+date: "7/17/2020"
+output: html_document
+---
+This week I will be constructing ets models. Te data I will use comes from the ffp2 package. It measures monthly retail debit card usage in Iceland in millions of ISK. Let's take a preliminary look at the structure of the set. 
+```{r}
+library(forecast)
+library(fpp2)
+library(seasonal)
+library(dplyr)
+library(kableExtra)
+str(debitcards)
+```
+Looks like it is already a time series. Let's see what the scope of the series is.
+
+```{r}
+debitcards
+```
+
+Looks like we have monthly observations from 2000-2012. Let's plot this series. 
+
+```{r}
+autoplot(debitcards)+
+  ggtitle("Monthly Retail Debit Card Usage In Iceland") +
+  ylab("million ISK") +
+  scale_x_continuous(breaks=seq(2000, 2012, 1))+
+  ggthemes::theme_calc()
+
+```
+
+There appears to be some seasonality and an increasing trend over time. We can decompose this series a number of ways to get some insight into those. Let's use an additive and multiplicative decomposition to start. 
+```{r}
+autoplot(decompose(debitcards, "a")) + 
+  ggtitle("Additive Decomposition") +
+  ggthemes::theme_calc()
+
+autoplot(decompose(debitcards, "m")) + 
+  ggtitle("Multiplicative Decomposition") +
+  ggthemes::theme_calc()
+```
+
+The looks of these two are pretty similar. That being said the remainder component seems to become less seasonal later in time in the multiplicative series. Let's take a look at a few more decompositions. First we will look at STL, which is an acronym for “Seasonal and Trend decomposition using Loess”, while Loess is a method for estimating nonlinear relationships. 
+
+```{r}
+debitcards %>%
+  stl(t.window=13, s.window="periodic", robust=TRUE) %>%
+  autoplot() +
+  ggtitle("STL Decomposition") +
+  ggthemes::theme_calc()
+```
+
+Still pretty seasonal in the latter parts of time in the remainder section. Let's finally take a look at the X11 method, which has the features of trend-cycle estimates are available for all observations including the end points, and the seasonal component is allowed to vary slowly over time. This method could be appealing here, because the increasing trend seems to be slowing down later in the series. 
+
+```{r}
+debitcards %>%
+  seas(x11 = "") %>%
+  autoplot() +
+  ggtitle("X11 Decomposition") +
+  ggthemes::theme_calc()
+```
+
+This does a nice job of removing any components from the remainder component. Let's split our data into a training set, and an evaluation set, and fit some models. 
+
+```{r}
+train <- window(debitcards, end = c(2010, 12))
+test <- window(debitcards, start = c(2011, 1))
+```
+
+
+Ok, so the first step is for us to iteratively fit ETS models, and trim down the ones that do not perform well. We can use that using a nifty function called lapply. If you are not familiar with the apply family functions, they're similar to loops. Here I am going to use lapply to create a list of the accuracy function output results to compare ETS Models. ETS is an acronym for for (Error, Trend, Seasonal). This label can also be thought of as ExponenTial Smoothing. They are a type of exponential smoothing.  Forecasts produced using exponential smoothing methods are weighted averages of past observations, with the weights decaying exponentially as the observations get older. In other words, the more recent the observation the higher the associated weight.
+
+The ETS models I will test are "ZZZ", which is auto selected, "ANN" is simple exponential smoothing with additive errors,  "MNN" is simple exponential smoothing with multiplicative errors, "MAM" is multiplicative Holt-Winters' method with multiplicative errors, and "MAN" Holt’s linear method with multiplicative errors. 
+
+
+```{r}
+ets_model_types <- c("ZZZ", "ANN", "MNN", "MAM", "MAN")
+
+ts_model_list <- lapply(setNames(unique(ets_model_types), 
+                                  unique(ets_model_types)),
+                         
+                         function(x){
+                           
+                           model <- ets(y = train, model = x)
+                           
+                           fcsts <- forecast(model, h = 32)
+                           
+                           eval_metrics <-
+                             accuracy(object = fcsts,
+                                      x = test)
+                           return(eval_metrics)
+                           
+                         })
+
+kable(ts_model_list[["ZZZ"]], caption = "ZZZ")
+kable(ts_model_list[["ANN"]], caption = "ANN")
+kable(ts_model_list[["MNN"]], caption = "MNN")
+kable(ts_model_list[["MAM"]], caption = "MAM")
+kable(ts_model_list[["MAN"]], caption = "MAN")
+
+```
+
+
+Ok, so comparing those models in terms of RMSA and MAE "MAM" which is multiplicative Holt-Winters' method with multiplicative errors, and "MAN" which is Holt’s linear method with multiplicative errors performed the best. The "MAM" model was the  model using "ZZZ". The "MAM" model performed SO well that I think it could be a case of over fitting. Let's generate the training data models AIC scores as another benchmark to see if it is worth considering an alternative model to these two for forecasts. 
+
+```{r}
+ets_model_list_AIC <- lapply(setNames(unique(ets_model_types), 
+                                  unique(ets_model_types)),
+                         
+                             function(x){
+                           
+                               model <- ets(y = train,
+                                            model = x)
+                               
+                               fcsts <- forecast(model, h = 32)
+                               
+                               eval_metric <- AIC(model)
+                           
+                         })
+aics <- data.frame("Model Type" = ets_model_types,
+                   "AIC" = unlist(ets_model_list_AIC)) 
+
+kable(aics, caption = "AIC Scores For Training Models")
+```
+
+
+Ok, So "MAM" and 'MAN" performed the best once again. I think that comparing the AIC's scores between those two is also a confirmation of some possible overfitting in the "MAM" model. It performs so much better than the rest in this metric as well. Let's forecast. 
+
+```{r}
+ets_MAM <- ets(debitcards, 'MAM')
+
+ets_MAN <- ets(debitcards, 'MAN')
+
+hist(ets_MAM$residuals, col = "grey", main = "MAM ETS Model Resiuals", xlab = "MAM ETS MODEL")
+
+hist(ets_MAN$residuals, col = "grey", main = "MAN ETS Model Resiuals", xlab = "MAN ETS MODEL")
+
+
+```
+
+So in terms of the distribution of residuals, we see that the "MAM" is nearly normally distributed, and the "MAN" model has a pretty significant left skew. How normally distributed the "MAM" residuals are leads me to believe that again, we are seeing some overfitting here. Let's look at some more indicators of model performance from a visual perspective. We can plot the residuals in a line chart, and the forecast errors as well. 
+
+```{r}
+cbind('Residuals' = residuals(ets_MAM),
+      'Forecast errors' = residuals(ets_MAM,type='response')) %>%
+  autoplot(facet=TRUE) + xlab("Year") + ylab("") + 
+  ggtitle("Residuals and Forecast Errors From ETS Model")+
+  ggthemes::theme_calc()
+
+cbind('Residuals' = residuals(ets_MAN),
+      'Forecast errors' = residuals(ets_MAN,type='response')) %>%
+  autoplot(facet=TRUE) + xlab("Year") + ylab("") + 
+  ggtitle("Residuals and Forecast Errors From ETS Model")+
+  ggthemes::theme_calc()
+```
+
+Ok, so again, we see that the "MAM" has nearly perfect white noise residuals, and the "MAN" model has some elements of seasonality left unaccounted for. Let's see what the plots of the fitted values vs. actual values are for both models, forecast 2 years into the future, and add their forecasts to the plot as well. 
+
+```{r}
+my_fcsts_MAM <- forecast(ets_MAM, h = 24)
+
+my_fcsts_MAN <- forecast(ets_MAN, h = 24)
+
+autoplot(debitcards) +
+  autolayer(fitted(ets_MAM), series = "Fitted Values") + 
+  autolayer(my_fcsts_MAM, series = "2 yr forecats")+
+  ggtitle("Fitted Values Versus Actual W/ Forecasts 'MAM'") + 
+  ylab("million ISK")+
+  theme_classic()
+
+autoplot(debitcards) +
+  autolayer(fitted(ets_MAN), series = "Fitted Values") + 
+  autolayer(my_fcsts_MAN, series = "2 yr forecats")+
+  ggtitle("Fitted Values Versus Actual W/ Forecasts 'MAN'") + 
+  ylab("million ISK") +
+  theme_classic()
+```
+
+So It would appear as suspected, their may be some overfittig occurring here in the "MAM" model. The "MAN" model does a really good job of forecasting the trend, but misses some of the seasonality component occurring. I would also point out that the forecasts for the "MAN" model capture the diminish returns of the trend seen occurring in the latter years of the series very well. The slope of the forecasts is increasing, but does appear some what slater than the overall trend. Finally, let's look at the forecast models metrics to see which model performed better, and to what magnitude better. 
+
+```{r}
+accuracy(ets_MAM)
+accuracy(ets_MAN)
+print(paste("The AIC Score for the 'MAM' model is", AIC(ets_MAM)))
+
+print(paste("The AIC Score for the 'MAN' model is", AIC(ets_MAN)))
+
+```
+As expected, the "MAM" model performed much better than the "MAN" in every accuracy metric, and AIC score. However The "MAN" also performed very well. I am curious as to what my class mates opinion on the matter of the possible over fitting occurring in the "MAM" is!
+
+

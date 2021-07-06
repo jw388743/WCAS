@@ -1,0 +1,225 @@
+---
+title: "JW Week 5 Discussion"
+author: "James Williams"
+date: "7/29/2020"
+output: html_document
+---
+
+# Intro
+
+This week's discussion topic is comparing ETS & ARIMA models to a GARCH model. ARCH (autoregressive conditionally heteroscedastic) model is a model for the variance of a time series. ARCH models are used to describe a changing, possibly volatile variance. Although an ARCH model could possibly be used to describe a gradually increasing variance over time, most often it is used in situations in which there may be short periods of increased variation. A GARCH (generalized autoregressive conditionally heteroscedastic) model uses values of the past squared observations and past variances to model the variance at time t. **[(11.1 ARCH/GARCH Models)](11.1 ARCH/GARCH Models)**  The models I will build will be for Electricity net generation measured in billions of kilowatt hours (kWh). The data is from 1973-01-01, to 2013-06-01. This data comes from the `fpp2` package. 
+
+## Visualizations
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+library(fpp2)
+library(dplyr)
+library(tidyr)
+library(quantmod)
+library(lubridate)
+
+autoplot(usmelec)+
+  ggtitle("Electricity monthly total net generation: January 1973 - June 2013") +
+  ylab("kWH")
+
+```
+
+This season has an increasing trend, and elements of seasonality. Additionally, it does not appear so much that the variance is increasing over time, but the increasing trend is causing the peaks to be higher, and the troughs to be lower. Let's decompose this series, and see the elects separate from one another. 
+
+```{r}
+autoplot(decompose(usmelec, "a")) + 
+  ggtitle("Additive Decomposition")
+
+autoplot(decompose(usmelec, "m")) + 
+  ggtitle("Multiplicative Decomposition")
+
+library(seasonal)
+usmelec %>% 
+ stl(t.window=13, s.window="periodic", robust=TRUE) %>%
+  autoplot() +
+  ggtitle("STL Decomposition")
+
+usmelec %>% 
+  seas(x11 = "") %>%
+  autoplot() +
+  ggtitle("X11 Decomposition")
+```
+
+This data is very seasonal. The X11 decomposition seems to do the best job removing all of the components from the remainder series. It is very stationary, and follows no patter, unlike the other 3. 
+
+## Models 
+
+The three models we will be building and comparing are ETS, ARIMA, and GARCH. First, let's build out the ETS models, and select the best performing one. we'll need to split the data into a training set and a test set. We will use until the end of 2004 to train, and  2005: 2013-06 to test. 
+
+### ETS
+
+The ETS models I will test are "ZZZ", which is auto selected, "ANN" is simple exponential smoothing with additive errors,  "MNN" is simple exponential smoothing with multiplicative errors, "MAM" is multiplicative Holt-Winters' method with multiplicative errors, and "MAN" Holt’s linear method with multiplicative errors. 
+
+```{r message=FALSE, warning=FALSE}
+train <- window(usmelec, end = c(2004,12))
+
+test<- window(usmelec, start = c(2005,1))
+
+library(kableExtra)
+ets_model_types <- c("ZZZ", "ANN", "MNN", "MAM", "MAN")
+
+ts_model_list <- lapply(setNames(unique(ets_model_types), 
+                                  unique(ets_model_types)),
+                         
+                         function(x){
+                           
+                           model <- ets(y = train, model = x)
+                           
+                           fcsts <- forecast(model, h = 32)
+                           
+                           eval_metrics <-
+                             accuracy(object = fcsts,
+                                      x = test)
+                           return(eval_metrics)
+                           
+                         })
+
+kable(ts_model_list[["ZZZ"]], caption = "ZZZ")
+kable(ts_model_list[["ANN"]], caption = "ANN")
+kable(ts_model_list[["MNN"]], caption = "MNN")
+kable(ts_model_list[["MAM"]], caption = "MAM")
+kable(ts_model_list[["MAN"]], caption = "MAN")
+
+```
+
+It appears the auto selection found "MAM". It significantly out performs the others, so we shall use it to test. Let's fit the model. 
+
+```{r}
+my_ets <- ets(y = train, model = "MAM")
+```
+
+
+
+
+### ARIMA
+
+For the ARIMA models, I will derive two $ARIMA(p,d,q)$ orders automatically. The first will use the functionality of `forecast::auto.arima` to account for seasonality directly by estimating the $(PDQ)$ component of the model is as such
+
+$$
+
+ARIMA(p,d,q)(P,Q,D)[m]
+
+$$
+
+The second will use `forecast::stlf(method = "arima")`. This function will forecast STL objects are obtained by applying a non-seasonal forecasting method to the seasonally adjusted data and re-seasonalizing using the last year of the seasonal component.
+
+First, let's look at some features of this series that will give use a sense of its structure from an "ARIMA" point of view. We will determine if our series has a unit root, and needs to be differenced. I will use  the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test to stay consistent w/ the method used in the text. In this test, $Ho$ is that the data are stationary, and we look for evidence that the null hypothesis is false. Consequently, rejections of $Ho$ suggest that differencing is required.
+
+```{r}
+library(urca)
+
+diffs <- usmelec %>% 
+  ndiffs()
+
+print(paste("The number of differences this series requires is", diffs))
+
+sdiffs<- usmelec %>% 
+  diff(lag=12) %>% 
+  ndiffs()
+
+print(paste("The number of seasonal differences this series requires is", diffs))
+```
+
+The results of the tests indicate we should do both a seasonal difference and a first difference in our ARIMA models. 
+
+Now let's take a look at the ACF and PACF plots, and fit the models.  
+
+```{r}
+train %>% 
+  diff %>% 
+  ggAcf()
+
+train %>%
+  diff %>% 
+  ggPacf()
+
+my_auto_arima <- auto.arima(train, seasonal = TRUE)
+
+my_stlf_arima <- stlf(train, method = "arima", h = length(test))
+
+
+```
+
+Here are the results using `auto.arima()`
+
+```{r}
+my_auto_arima %>% 
+  summary()
+
+```
+
+And here is using STLF: 
+
+```{r}
+my_stlf_arima$model
+
+accuracy(my_stlf_arima)
+```
+
+The results from the STLF make quite a bit of sense, since the ACF is sinusoidal, and the PACF has about an order of 2. This model performs best in terms of AICc, RMSE, MAPE, and MASE. I will use this model to forecast test data. 
+
+
+
+### GARCH
+
+Finally, we need to fit the GARCH model for our training set. I will fit the model to the order of $$GARCH(1,1)$$
+
+```{r}
+library(fGarch)
+garch_11=garchFit(data=train, formula = ~garch(1,1), cond.dist="QMLE", trace=FALSE)
+
+summary(garch_11)
+```
+
+### Test
+
+Let's evaluate our models performance on the test data. 
+
+```{r}
+fcst_ets <- forecast(my_ets, h = length(test))
+
+fcst_arima <- my_stlf_arima$mean
+
+fcst_garch <- fGarch::predict(garch_11, n.ahead = length(test))
+
+fcst_garch <- ts(fcst_garch$meanForecast, start = c(2005,1), frequency = 12)
+
+# MAM
+accuracy(fcst_ets$mean, test)
+
+#ARIMA
+accuracy(fcst_arima, test)
+
+#GARCH 
+accuracy(fcst_garch, test)
+```
+
+Based on the test set evaluation metrics, the "MAM" model greatly outperforms the other two.
+
+Let's take a look at the forecasts versus the observed values in the test set. 
+
+```{r}
+autoplot(test)+ 
+  autolayer(fcst_ets$mean, series = "MAM")+
+  ggtitle("MAM Forecasts v Observed Values")+
+  ylab("kwH")
+
+autoplot(test)+ 
+  autolayer(fcst_arima, series = "ARIMA")+
+  ggtitle("ARIMA(0,1,2) with drift Forecasts v Observed Values")+
+  ylab("kwH")
+
+autoplot(test)+ 
+  autolayer(fcst_garch, series = "GARCH")+
+  ggtitle("GARCH(1,1)) Forecasts v Observed Values")+
+  ylab("kwH")
+```
+
+So it appears that I completely missed the mark w/ my Garch model. The 'MAM" model performed the best, just slightly under forecasting the values in the test set. 

@@ -1,0 +1,149 @@
+---
+title: "JW Week 7 Discussion"
+author: "James Williams"
+date: "8/12/2020"
+output: html_document
+---
+# Intro
+
+This week's discussion consider building a NNAR model. This model takes 3 parameters $NNAR(p,P,k)_m$ where p = the number of lags used on the inputs, k = the number of nodes in the hidden layer of the neural net, and P = the number of seasonal lags used in the inputs. 
+The coefficients attached to the independent variables in a neural network are called “weights”. The forecasts are obtained by a linear combination of the inputs. The weights are selected in the neural network framework using a “learning algorithm” that minimizes a “cost function” such as the MSE. The result is then modified by a nonlinear function before being output when the network has > 1 hidden layers. 
+
+## EDA
+
+The time series that will be forecasted using an $NNAR(p,P,k)_m$ network is one of the data sets in the `fpp2` package. It contains weekly observations beginning 2 February 1991, ending 20 January 2017. Units are "million barrels per day". Let's visualize this series and provide some descriptive statistics. 
+
+```{r message=FALSE, warning=FALSE}
+library(fpp2)
+library(dplyr)
+library(kableExtra)
+
+autoplot(gasoline)+
+  ggtitle("US Gasoline Product Supplied: 1991 - 2017")+
+  ylab("Million Barrels Per Day")
+
+hist(gasoline, col = "tomato", main = "US Gasoline Product Supplied: 1991 - 2017")
+
+psych::describe(gasoline) %>% 
+  kableExtra::kable(caption = "Descriptive Stats")
+```
+
+This is a pretty interesting series. we see an upward until the mid 2000s, then a decline, followed by an increase in the trend. I'd venture to say that it probably has too do with the Great recession that occurred in 2008. There's also significant left skew in the distribution. We may want to perform a Box Cox transformation. Let's derive lambda. 
+
+```{r}
+BoxCox.lambda(gasoline)
+```
+
+
+Let's decompose this series to gain some more insight into the seasonal components. 
+
+```{r}
+autoplot(decompose(gasoline))+
+  ggtitle("Additive Decomposition")
+
+autoplot(decompose(gasoline, type = "m"))+
+  ggtitle("Multiplicative Decomposition")
+```
+
+We see that there is a major seasonal component, and the trend follows the pattern discussed above. As always in order to evaluate, we will split our data into a test set and a training set. The training set will consist of values between 1991 and the end of 2011. The test set will consist of values beginning in 2012 and onward. 
+
+## Models
+
+```{r}
+
+train <- window(gasoline, end = c(2011, 52))
+
+test <- window(gasoline, start = c(2012, 1))
+
+```
+
+Let's plot the ACF and PACF to get an idea of the autocorrelation occurring in the series
+
+```{r}
+Acf(gasoline) 
+
+Pacf(gasoline)
+```
+
+
+The first model will leverage the auto selection feature of the `nnetar` function to determine the order of p in the first $NNAR(p,P,k)_m$ model that will be built. We will also use a Box Cox transformation 
+
+```{r}
+nnet1 <- nnetar(train, lambda = 1.7, P = 1, size = 10)
+
+print(paste("The order of the first NNAR model built is ", nnet1$method))
+
+accuracy(nnet1)
+
+
+
+```
+This model performs very well on the training set. So well in fact, it may be a case of over fitting. Let's build the same model w/o the transformation. 
+
+```{r}
+nnet2 <- nnetar(train, P = 1, size = 10)
+
+print(paste("The order of the second NNAR model built is ", nnet2$method))
+
+accuracy(nnet2)
+```
+Again, this model performs very well, but seems as if it might be a case of over fitting. Instead of generating the p param automatically, let's select one ourselves. Based on the Pacf plot, an order of p = 5 may be appropriate.
+
+```{r}
+nnet3 <- nnetar(train, p = 5, P = 1, size = 10)
+
+print(paste("The order of the third NNAR model built is ", nnet3$method))
+
+accuracy(nnet3)
+```
+
+This model performs relatively the same as the other ones, albeit slightly worse. Finally, let's fit nnet2 w/o bootstrapping.
+
+```{r}
+nnet4 <- nnetar(train, p = 5, P = 1, size = 10, bootstrap = F)
+
+print(paste("The order of the third NNAR model built is ", nnet4$method))
+
+accuracy(nnet4)
+```
+Again, we are seeing relatively similar results. Let's fit models 2 and 3, and compare their forecasts to the test data. 
+
+```{r message=FALSE, warning=FALSE}
+fcst2 <- forecast(nnet2, h = length(test))
+
+fcst3 <- forecast(nnet3, h = length(test))
+
+autoplot(train) +
+  autolayer(fcst2, PI = F, series = "Forecasts")+ 
+  ggtitle(paste("Forecasts From", nnet2$method))+
+  ylab("Million Barrels Per Day")
+
+autoplot(train) +
+  autolayer(fcst3, PI = F, series = "Forecasts")+ 
+  ggtitle(paste("Forecasts From", nnet3$method))+
+  ylab("Million Barrels Per Day")
+
+autoplot(test) +
+  autolayer(fcst2, PI = F, series = "Forecasts")+ 
+  ggtitle(paste("Test Set V Forecasts From", nnet2$method))+
+  ylab("Million Barrels Per Day")
+
+autoplot(test) +
+  autolayer(fcst3$mean, PI = F, series = "Forecasts")+ 
+  ggtitle(paste("Test Set V Forecasts from", nnet3$method))+
+  ylab("Million Barrels Per Day")
+
+accuracy(test, fcst2$mean) %>% 
+  kable(caption = nnet2$method)
+
+accuracy(test, fcst3$mean) %>% 
+  kable(caption = nnet3$method)
+
+checkresiduals(fcst2)
+
+checkresiduals(fcst3)
+
+
+```
+
+The NNAR(11,1,10)[52] model greatly outperforms the other. The forecasts do not capture the variability that exists in the observed values, but capture the general pattern of peaks and troughs when they occur. The residuals exhibit a normal distribution and white noise. There seems to be some auto correlation remaining in the residuals due to seasonality. 

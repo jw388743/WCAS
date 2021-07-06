@@ -1,0 +1,306 @@
+---
+title: "JW HW 3"
+author: "James Williams"
+date: "8/10/2020"
+output: html_document
+---
+
+# INTRO
+
+The data I will be forecasting with comes from a Kaggle competition. It records the monthly high temperatures from 1973 - 2020 in Rio. Let's load the data, and some packages and take a look at it. 
+
+```{r message=FALSE, warning=FALSE}
+
+library(lubridate)
+library(fpp2)
+library(dplyr)
+library(tidyr)
+library(seasonal)
+library(urca)
+
+df <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/station_rio_temp.csv", stringsAsFactors = F)
+
+head(df,1)
+
+str(df)
+
+psych::describe(df)
+
+```
+
+## Exploratory Data Analysis
+
+As currently constructed, the months are column names. I am going to need to coalesce the column names into a single character vector/ factor column to make an accurate time series. Additionally, each column has a max value 0f 999.90. That does not make sense, so I am going to go ahead and replace those values w/ the previously observed value in the data.  I think this makes more sense in a time-series analysis instead of some sort of PCA imputation or even using a statistic like a mean or a median. 
+
+```{r message=FALSE, warning=FALSE}
+df <- df %>% 
+  pivot_longer(., -YEAR, names_to = "Month", values_to = "Temp")
+
+for (i in 1:nrow(df)){
+  if(df$Temp[i]==999.90){
+    df$Temp[i]=df$Temp[i-1]
+  }
+  
+}
+
+head(df, 1)
+
+psych::describe(df)
+```
+
+Ok, now that our data is tidy, we can go ahead and create a ts object and plot the series and it's distribution. Let's also go ahead and decompose our series using a few methods. 
+
+```{r message=FALSE, warning=FALSE}
+rio_ts <- ts(df$Temp, start = c(1973,1), frequency = 12)
+
+hist(rio_ts, col = "grey", main = "Monthly Temp Highs Rio 1973- 2020")
+
+autoplot(rio_ts)+
+  ylab("Celcius")+
+  ggtitle("Monthly Temperature High: Rio 1973 - 2020")
+
+autoplot(decompose(rio_ts, type = 'a'))+
+  ggtitle("Additive Decomposition")
+
+autoplot(decompose(rio_ts, type = 'm'))+
+  ggtitle("Multiplicative Decomposition")
+```
+
+So there seems to be quite a bit of variability in our series. There seems to be a seasonal component, Let's take a look at a few more decompositions. First we will look at STL, which is an acronym for “Seasonal and Trend decomposition using Loess”, while Loess is a method for estimating nonlinear relationships. We can also take a look at the X11 method, which has the features of trend-cycle estimates are available for all observations including the end points, and the seasonal component is allowed to vary slowly over time.
+
+```{r}
+rio_ts %>%
+  stl(t.window=13, s.window="periodic", robust=TRUE) %>%
+  autoplot() +
+  ggtitle("STL Decomposition")
+
+rio_ts %>%
+  seas(x11 = "") %>%
+  autoplot() +
+  ggtitle("X11 Decomposition")
+```
+
+So the x11 method does a poor job decomposing our series, which makes sense due to the lack of trend. Let's plot the acf and pacf plots. 
+
+```{r message=FALSE, warning=FALSE}
+
+Acf(rio_ts)
+
+Pacf(rio_ts)
+
+```
+
+Very seasonal in both components. Let's test if this series has a unit root, and needs to be differenced. I will use  the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test to stay consistent w/ the method used in the text. In this test, $Ho$ is that the data are stationary, and we look for evidence that the null hypothesis is false. Consequently, rejections of $Ho$ suggest that differencing is required.
+
+```{r}
+urca::ur.kpss(rio_ts)
+```
+
+In this case, we see that the series is not stationary. Let's see how many differences it requires.
+
+```{r}
+ndiffs(rio_ts)
+```
+
+So in order to create a stationary series, we need to difference once. Let's replot the ACF and PACF with the differenced series. 
+
+```{r}
+
+rio_ts %>% 
+  diff() %>% 
+  Acf()
+
+rio_ts %>% 
+  diff() %>% 
+  Pacf()
+
+
+```
+
+## Models
+
+First things first, lets split our data into a training set, and a testing set to evaluate the models abilities to forecast. We have 47 years of monthly observations. Lets use the last 10 years of observations as the test set.
+
+```{r}
+train <- window(rio_ts, end = c(2009, 12))
+
+test <- window(rio_ts, start = c(2010, 1))
+```
+
+
+### Linear Model
+
+First, lets just build a standard linear model of the training set against time. I think it also is worth it to include seasonal dummies due to the prevalence of seasonality. 
+
+```{r message=FALSE, warning=FALSE}
+library(kableExtra)
+
+my_szns <- seasonaldummy(train)
+my_lm <- tslm(train ~ trend + my_szns)
+
+summary(my_lm)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+lm_forecasts <- forecast(my_lm, h = length(test),
+    data.frame(my_szns=I(seasonaldummy(train,length(test)))))
+
+accuracy(test, lm_forecasts$mean) %>% 
+  kableExtra::kable(caption = "LM W/ Seasonal Components Accuracy")
+
+autoplot(train)+
+  autolayer(lm_forecasts, PI = F, series = "Forecasts")+
+  ylab("Celcius")+
+  ggtitle("Linear Model Forecasts")
+
+autoplot(test)+
+  autolayer(lm_forecasts, PI = F, series = "Forecasts")+
+  ylab("Celcius")+
+  ggtitle("Linear Model Forecasts V Observed Values")
+  
+checkresiduals(lm_forecasts)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+```
+
+So this model does a good job forecasting. The residuals are normally distributed, the forecasts look identical to the observed values, a large amount of the variation is explained by the trend and the seasonal dummies ($R^2$ = .69) and the accuracy metrics perform very well. The only downsides are there appear to be some slight seasonal components remaining in the   
+
+### ETS 
+
+ETS is an acronym for for (Error, Trend, Seasonal). This label can also be thought of as ExponenTial Smoothing. They are a type of exponential smoothing.  Forecasts produced using exponential smoothing methods are weighted averages of past observations, with the weights decaying exponentially as the observations get older. In other words, the more recent the observation the higher the associated weight.
+
+The ETS models I will test are "ZZZ", which is auto selected, "ANN" is simple exponential smoothing with additive errors,  "MNN" is simple exponential smoothing with multiplicative errors, "MAM" is multiplicative Holt-Winters' method with multiplicative errors, and "MAN" Holt’s linear method with multiplicative errors. 
+
+```{r}
+ets_model_types <- c("ZZZ", "ANN", "MNN", "MAM", "MAN")
+
+ts_model_list <- lapply(setNames(unique(ets_model_types), 
+                                  unique(ets_model_types)),
+                         
+                         function(x){
+                           
+                           model <- ets(y = train, model = x)
+                           
+                           fcsts <- forecast(model, h = length(test))
+                           
+                           eval_metrics <-
+                             accuracy(object = fcsts,
+                                      x = test)
+                           return(eval_metrics)
+                           
+                         })
+
+kable(ts_model_list[["ZZZ"]], caption = "ZZZ")
+kable(ts_model_list[["ANN"]], caption = "ANN")
+kable(ts_model_list[["MNN"]], caption = "MNN")
+kable(ts_model_list[["MAM"]], caption = "MAM")
+kable(ts_model_list[["MAN"]], caption = "MAN")
+```
+
+Per the accuracy metrics on the training set data, it appears that "MAM" performs best. I'll use this model type to forecast. 
+
+```{r}
+mam_ets <- ets(y = train, model = "MAM")
+
+ets_forecasts <- forecast(mam_ets, h = length(test))
+
+accuracy(test, ets_forecasts$mean) %>% 
+  kableExtra::kable(caption = "MAM W/ Seasonal Components Accuracy")
+
+autoplot(train)+
+  autolayer(ets_forecasts, PI = F, series = "Forecasts")+
+  ylab("Celcius")+
+  ggtitle("MAM Forecasts")
+
+autoplot(test)+
+  autolayer(ets_forecasts, PI = F, series = "Forecasts")+
+  ylab("Celcius")+
+  ggtitle("MAM Forecasts V Observed Values")
+  
+checkresiduals(ets_forecasts)
+```
+
+The model performs relatively the same as the linear model. 
+
+### ARIMA
+
+The final model type we will train is and ARIMA MOdel. I will train two models, one using the  `auto.arima()` function and one where I will use `forecast::stlf(method = "arima")`. This function will forecast STL objects are obtained by applying a non-seasonal forecasting method to the seasonally adjusted data and re-seasonalizing using the last year of the seasonal component. We will difference the series and forecast. 
+
+```{r}
+arima_auto <- auto.arima(diff(train))
+
+arima_stlf <- stlf(diff(train), method = "arima", h = length(test)-1)
+
+accuracy(arima_auto) %>% 
+  kable(caption = "ARIMA USing Auto Selction")
+
+accuracy(arima_stlf) %>% 
+  kable(caption = "STLF ARIMA")
+
+checkresiduals(arima_auto)
+
+checkresiduals(arima_stlf)
+```
+
+Both of these models perform relatively the same, lets forecast both of them and compare to the test set. 
+
+```{r message=FALSE, warning=FALSE}
+
+test_diff <- diff(test)
+
+fcst_arima <- forecast(arima_auto, h = length(diff(test)))
+
+accuracy(test_diff, fcst_arima$mean) %>% 
+  kable(caption = "Auto Selected ARIMA")
+
+accuracy(test_diff, arima_stlf$mean) %>% 
+  kable(caption = "STLF ARIMA")
+
+autoplot(test_diff)+
+  autolayer(fcst_arima, PI = F, series = "Forecasts")+
+  ylab("Celcius")+
+  ggtitle("ARIMA(1,0,0)(2,0,0)[12] with zero mean")
+
+autoplot(test_diff)+
+  autolayer(arima_stlf$mean, PI = F, series = "Forecasts")+
+  ylab("Celcius")+
+  ggtitle("STL +  ARIMA(4,0,2) with zero mean")
+
+checkresiduals(fcst_arima)
+
+checkresiduals(arima_stlf$residuals)
+
+
+```
+
+The STLF ARIMA just slightly outperforms the auto selected model. 
+
+
+## COnclusion
+
+Based on the distribution of residuals, and the evaluation statistics it appears that the ARIMA model performs best. All of the evaluation metrics are relatively the same, but there appears to  be the least serial correlation in that model's residuals. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

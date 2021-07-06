@@ -1,0 +1,332 @@
+---
+title: "JW Week 6 Discussion"
+author: "James Williams"
+date: "8/4/2020"
+output: html_document
+---
+
+
+# Intro
+
+The objective of this week's discussion post is to build a VAR model. This model accounts for scenarios where there is a multidirectional relationship between the forecast variable, and the predictors. Such feedback relationships are allowed for in the vector autoregressive (VAR) model. The variables are treated symmetrically in a VAR model. They are all modeled as if they all influence each other equally. Every variable is variables are now treated as **[endogenous](https://en.wikipedia.org/wiki/Exogenous_and_endogenous_variables#:~:text=In%20an%20economic%20model%2C%20an,is%20determined%20by%20the%20model.)** A VAR model forecasts a vector of time series. Each equation of predictions contains one variable for each lag of the system. There are two decisions one has to make when using a VAR to forecast, namely how many variables denoted by $$K$$ and how many lags (denoted by $$p$$ should be included in the system. The number of coefficients to be estimated in a VAR is equal to: 
+
+$$
+K + pK^2
+$$
+
+and 
+
+$$
+1 +pK
+$$
+
+per equation. If we consider a model where $$K = 3$$ and $$p = 1$$ then there are 
+
+$$
+1 + (3*1) = 4
+$$
+
+per equation to be estimated, and 
+
+$$
+3 + 1*3^2 = 12
+$$
+
+for the entire system. It is best practice to keep $$K$$ small and include only variables that are correlated with each other, and therefore useful in forecasting each other. 
+
+Var is useful when:
+
+* Forecasting a collection of related variables where no explicit interpretation is required;
+
+* Testing whether one variable is useful in forecasting another (the basis of Granger causality tests);
+
+* Impulse response analysis, where the response of one variable to a sudden but temporary change in another variable is analyzed;
+
+* Forecast error variance decomposition, where the proportion of the forecast variance of each variable is attributed to the effects of the other variables.
+
+## EDA
+
+The data we will consider is monthly aggregated adjusted closing stock prices for Walmart and UPS. The rationale behind using these two stocks is that Walmart uses private shipping firms (UPS and FedEx), and not the USPS for shipping its products to consumers. Additionally, Walmart is a huge digital retailer, as much as they are a multichannel (physical) retailer. It seems to follow that if UPS or Fedex is doing well, that Walmart is also doing well, since it uses these firms service in order to ships products to consumers. Let's take a look at the relationship between the adjusted closing prices of these firms. 
+
+```{r message=FALSE, warning=FALSE}
+library(fpp2)
+library(dplyr)
+library(tidyr)
+
+# Import
+
+wmt <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/WMT_monthly.csv", 
+                stringsAsFactors = F)
+
+wmt <- wmt[c(1:60),]
+
+fdx <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/FDX_monthly.csv", 
+                stringsAsFactors = F)
+
+fdx <- fdx[c(1:60),]
+
+ups <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/UPS_monthly.csv",
+                stringsAsFactors = F)
+# There were some class issues upon import, so I just decoded to make my own frame
+
+ad_closing_prices <- data.frame(
+  "Date" = wmt$Date,
+  "WMT" = as.numeric(wmt$Adj.Close),
+  "FDX" = as.numeric(fdx$Adj.Close),
+  "UPS" = as.numeric(ups$Adj.Close),
+  "WMT_Volume" = as.numeric(wmt$Volume),
+  "FDX_Volume" = as.numeric(fdx$Volume),
+  "UPS_Volume" = as.numeric(ups$Volume)
+  )
+
+# Plots
+
+ggplot(ad_closing_prices, aes(x = WMT, y = UPS))+
+  geom_point()+
+  geom_smooth(se= F, method = "lm")+
+  ggtitle("WMT & UPS Relationship")
+
+ggplot(ad_closing_prices, aes(x = WMT, y = FDX))+
+  geom_point()+
+  geom_smooth(se= F, method = "lm")+
+  ggtitle("WMT & FDX Relationship")
+
+print(paste("The Pearson Correlation bettween the WMT and UPS Adj. Closing Prices from", 
+            head(ad_closing_prices$Date,1), " and",
+            tail(ad_closing_prices$Date,1), "is",
+            cor(ad_closing_prices$WMT, ad_closing_prices$UPS)))
+
+print(paste("The Pearson Correlation bettween the WMT and FDX Adj. Closing Prices from", 
+            head(ad_closing_prices$Date,1), " and",
+            tail(ad_closing_prices$Date,1), "is",
+            cor(ad_closing_prices$WMT, ad_closing_prices$FDX)))
+
+```
+
+There is a much more discernible relationship with the UPS & WMT stocks than FDX & WMT. Since we only want to use variables that are correlated w/ one another when building a VAR model, let's just consider WMT and UPS moving forward. Next, we should take a look at the trading volumes for each stock, to see if they are correlated w. adjusted closing prices. If they are, we may want to consider them moving forward. 
+
+
+```{r message=FALSE, warning=FALSE}
+# Plots
+
+ggplot(ad_closing_prices, aes(x = WMT, y = WMT_Volume))+
+  geom_point()+
+  geom_smooth(se= F, method = "lm")+
+  ggtitle("Adj. Closing Price & Monthly Trading Volume Relationship")+
+  ylab("WMT Monthly Volume")+
+  xlab("WMT Adj. CLosing Price")
+
+ggplot(ad_closing_prices, aes(x = UPS, y = UPS_Volume))+
+  geom_point()+
+  geom_smooth(se= F, method = "lm")+
+  ggtitle("Adj. Closing Price & Monthly Trading Volume Relationship")+
+  ylab("UPS Monthly Volume")+
+  xlab("UPS Adj. CLosing Price")
+
+ggplot(ad_closing_prices, aes(x = WMT, y = UPS_Volume))+
+  geom_point()+
+  geom_smooth(se= F, method = "lm")+
+  ggtitle("Adj. Closing Price & Monthly Trading Volume Relationship")+
+  ylab("UPS Monthly Volume")+
+  xlab("WMT Adj. CLosing Price")
+
+ggplot(ad_closing_prices, aes(x = UPS, y = WMT_Volume))+
+  geom_point()+
+  geom_smooth(se= F, method = "lm")+
+  ggtitle("Adj. Closing Price & Monthly Trading Volume Relationship")+
+  ylab("WMT Monthly Volume")+
+  xlab("UPS Adj. CLosing Price")
+
+print(
+  paste(
+    "The Pearson Correlation bettween the WMT Adj. Closing Price & its trading volume from",
+    head(ad_closing_prices$Date, 1),
+    " and",
+    tail(ad_closing_prices$Date, 1),
+    "is",
+    cor(ad_closing_prices$WMT, ad_closing_prices$WMT_Volume)
+  )
+)
+
+print(
+  paste(
+    "The Pearson Correlation bettween the UPS Adj. Closing Price & its trading volume from",
+    head(ad_closing_prices$Date, 1),
+    " and",
+    tail(ad_closing_prices$Date, 1),
+    "is",
+    cor(ad_closing_prices$UPS, ad_closing_prices$UPS_Volume)
+  )
+)
+
+print(
+  paste(
+    "The Pearson Correlation bettween the WMT Adj. Closing Price & UPS trading volume from",
+    head(ad_closing_prices$Date, 1),
+    " and",
+    tail(ad_closing_prices$Date, 1),
+    "is",
+    cor(ad_closing_prices$WMT, ad_closing_prices$UPS_Volume)
+  )
+)
+
+print(
+  paste(
+    "The Pearson Correlation bettween the UPS Adj. Closing Price & WMT trading volume from",
+    head(ad_closing_prices$Date, 1),
+    " and",
+    tail(ad_closing_prices$Date, 1),
+    "is",
+    cor(ad_closing_prices$UPS, ad_closing_prices$WMT_Volume)
+  )
+)
+```
+
+They all seem reasonably correlated, save for UPS and its trading volume. I think its probably best to train models that account for closing prices, and models which do not. Let's define these series as time-series objects, and plot them. Because of differences in scales, I am going to plot the prices for each firm together, and the volumes together. 
+
+```{r message=FALSE, warning=FALSE}
+wmt_ts <- ts(ad_closing_prices$WMT, start = c(2015,8), frequency = 12)
+
+ups_ts <- ts(ad_closing_prices$UPS, start = c(2015,8), frequency = 12)
+
+wmt_vol_ts <- ts(ad_closing_prices$WMT_Volume, start = c(2015,8), frequency = 12)
+
+ups_vol_ts <- ts(ad_closing_prices$UPS_Volume, start = c(2015,8), frequency = 12)
+
+autoplot(wmt_ts, series = "WMT")+
+  autolayer(ups_ts, series = "UPS")+
+  ggtitle("WMT & UPS Adj Closing Prices")+
+  ylab("USD $")
+  
+  autoplot(wmt_vol_ts, series = "WMT")+
+  autolayer(ups_vol_ts, series = "UPS")+
+  ggtitle("WMT & UPS Trading Volume")+
+  ylab("Volume")
+```
+
+There are similarities between the WMT & UPS Adj. Prices series. They both follow an upward trend, and the peaks and the troughs of the series seem to match up. They both trend upwards. On average, it seems that UPS trades higher than WMT, save for a significant decrease in the beginning in 2010 (most likely due to COVID). Additionally, the UPS series is much more volatile. In terms of the volume traded, they both seem pretty stationary, and their peaks and troughs tend to match up pretty well. On average, UPS trades much more frequently than WMT.
+
+## Models
+
+First we will split the series into training and testing data. Fun fact: you can store objects of class ts in data frames, so I will do that, since VAR models take multiple vectors for its y argument. The training period will end in 2019-07. 
+
+First, let's test if we need to difference our series. 
+
+```{r}
+ndiffs(wmt_ts)
+ndiffs(ups_ts)
+ndiffs(wmt_vol_ts)
+ndiffs(ups_vol_ts)
+```
+
+They all require a first order difference. Now lets create out objects of time series, with all of the series differneced. 
+
+```{r}
+train_df <- ts(as.matrix(
+  data.frame(
+    "wmt" = diff(window(wmt_ts, end = c(2019, 7))),
+    "wmt_vol" = diff(window(wmt_vol_ts, end = c(2019, 7))),
+    "ups" = diff(window(ups_ts, end = c(2019, 7))),
+    "ups_vol" = diff(window(ups_vol_ts, end = c(2019, 7)))
+  )
+),
+end = c(2019, 7),
+frequency = 12)
+
+test_df <- ts(as.matrix(
+  data.frame(
+    "wmt_test" = diff(window(wmt_ts, start = c(2019, 8))),
+    "wmt_vol_test" = diff(window(wmt_vol_ts, start = c(2019, 8))),
+    "ups_test" = diff(window(ups_ts, start = c(2019, 8))),
+    "ups_vol_test" = diff(window(ups_vol_ts, start = c(2019, 8)))
+  )
+),
+start = c(2019, 8),
+frequency = 12)
+```
+
+Next, we will use the `vars::VARselect` function to select the length of lags for our models. 
+
+```{r message=FALSE, warning=FALSE}
+library(vars)
+library(dplyr)
+
+## All 4 series 
+VARselect(train_df, lag.max=8, type="const")[["selection"]]
+
+## Both Adj closing prices, and WMT vol
+VARselect(train_df[,c(1:3)], lag.max=8, type="const")[["selection"]]
+
+## Both Adj closing prices, and UPS vol
+VARselect(train_df[,c(1,2,4)], lag.max=8, type="const")[["selection"]]
+
+## Both Adj closing prices only
+VARselect(train_df[,c(1,3)], lag.max=8, type="const")[["selection"]]
+```
+
+In the case of VAR, we usually want to use the BIC metric (denoted here as SC(n)) to select the number of lags. This is because AIC tends to select a larger number of lags. 
+
+Now we need to train our models up until the point that the residuals pass the tests that determines there is no serial correlation. The test the `vars` package uses is the Portmanteau test. I also will not include the model that considers all 4 series, since it is best to leave $$K$$ low. So three models will be built. 
+
+
+```{r message=FALSE, warning=FALSE}
+var_w_wmt_vol <- VAR(train_df[,1:3], p=2, type="const")
+
+serial.test(var_w_wmt_vol, lags.pt=10, type="PT.asymptotic") # passed
+
+var_w_ups_vol <- VAR(train_df[,c(1,2,4)], p=2, type="const")
+
+serial.test(var_w_ups_vol, lags.pt=10, type="PT.asymptotic") # passed
+
+var_prices_only <- VAR(train_df[,c(1,3)], p=1, type="const")
+
+serial.test(var_prices_only, lags.pt=10, type="PT.asymptotic") # passed
+
+```
+
+So all of the models passed the residuals check test. Let's plot the forecasts. 
+
+```{r}
+prices_only_fcst <-forecast(var_prices_only, h = length(test_df[,1])) 
+
+prices_only_fcst %>% 
+  autoplot()+
+  ggtitle("VAR(1) Model, Prices Only")
+
+ups_vol_fcst <-forecast(var_w_ups_vol, h = length(test_df[,1])) 
+
+ups_vol_fcst %>% 
+  autoplot()+
+  ggtitle("VAR(2) Model, W/ UPS Trading Volume")
+
+wmt_vol_fcst <-forecast(var_w_wmt_vol, h = length(test_df[,1])) 
+
+wmt_vol_fcst %>% 
+  autoplot()+
+  ggtitle("VAR(2) Model, W/ WMT Trading Volume")
+```
+
+The VAR models do not return residuals, but we can measure forecast accuracy, and plot the forecast v the actual values. 
+
+```{r}
+
+accuracy(prices_only_fcst$forecast$wmt, test_df[,1])
+
+accuracy(ups_vol_fcst$forecast$wmt, test_df[,1])
+
+accuracy(wmt_vol_fcst$forecast$wmt, test_df[,1])
+
+autoplot(test_df[,1], series = "Observed")+
+  autolayer(prices_only_fcst$forecast$wmt, series = "Forecast", PI = F)+
+  ggtitle("VAR(1) Prices Only Observed V Forecasts")
+
+autoplot(test_df[,1], series = "Observed")+
+  autolayer(ups_vol_fcst$forecast$wmt, series = "Forecast", PI = F)+
+  ggtitle("VAR(2) W/ UPS Volume Observed V Forecasts")
+
+autoplot(test_df[,1], series = "Observed")+
+  autolayer(wmt_vol_fcst$forecast$wmt, series = "Forecast", PI = F)+
+  ggtitle("VAR(2) W/ WMT Volume Observed V Forecasts")
+```
+
+The VAR(2) model w/ the incorporation of the UPS volume vector seems to perform the best, albeit slightly better compared to the other two. All of the forecasts are generally flat, and the confidence intervals are pretty wide. Not the best models to try to predict WMT monthly stock price. That being said, there was not a large sample (60 obs for 5 years), and there is a fair amount of volatility in the test set due to the market crashing because of COVID. 

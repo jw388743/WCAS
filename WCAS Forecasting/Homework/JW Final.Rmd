@@ -1,0 +1,541 @@
+---
+title: "JW ADEC746001 Predictive Analytics Final"
+author: "James Williams"
+date: "8/14/2020"
+output: pdf_document
+---
+
+
+# Introduction 
+
+The purpose of this assignment is to attempt to predict future cases of Dengue fever. Specifically, the analysis this paper provides will consider the problem as a time-series issue, and see if past values and their relationship to trend, seasonality, and other covariates can accurately forecast future case values.  The data from this assignment comes from a **[DrivenData](https://www.drivendata.org/competitions/44/dengai-predicting-disease-spread/)** competition. Per the problem posting, "Dengue fever is is a mosquito-borne disease that occurs in tropical and sub-tropical parts of the world. In mild cases, symptoms are similar to the flu: fever, rash, and muscle and joint pain. In severe cases, dengue fever can cause severe bleeding, low blood pressure, and even death."  This a worthwhile task, because leveraging insights abut this disease to be able to accurately predict cases can improve research initiatives and resource allocation to help fight life-threatening pandemics.
+
+## Data Preparation & Cleaning
+
+The competition has four data sets it provides: 
+  * training labels (number of cases and dates)
+  * training features (a number of temperature and climate variables)
+  * testing features (same as the training features but for the test set)
+  * submission format example
+  
+Here are the columns for the features sets. A detailed description of what each of these variables is **[can be found here.](https://www.drivendata.org/competitions/44/page/82/#features_list)** 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+df <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/Final Data/dengue_features_train.csv",
+               skip =0,  
+               comment.char = "",check.names = FALSE, quote="",
+               na.strings=c("", " "))
+
+colnames(df)
+
+```
+
+In summation, the different variable groups are:
+  * City and date indicators
+  * NOAA's GHCN daily climate data weather station measurements (variables that start with `station`) 
+  * PERSIANN satellite precipitation measurements (0.25x0.25 degree scale)
+  * NOAA's NCEP Climate Forecast System Reanalysis measurements (0.5x0.5 degree scale) (variables that start with `reanalysis`)
+  * Satellite vegetation - Normalized difference vegetation index (NDVI) - NOAA's CDR Normalized Difference Vegetation Index (0.5x0.5 degree scale) measurements (`ndvi` variables)
+  
+First, let's visualize the descriptive statistics of the variables in our data. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+library(dplyr)
+library(fpp2)
+library(tidyr)
+library(lubridate)
+
+cases <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/Final Data/dengue_labels_train.csv",
+                  stringsAsFactors = F, na.strings = c(""))
+
+psych::describe(df) %>% 
+  kableExtra::kable(caption = "Descriptive Stats: Features")
+
+psych::describe(cases) %>% 
+  kableExtra::kable(caption = "Descriptive Stats: Labels")
+
+
+
+```
+
+Looks like there are missing values in the features set. Let's find out where they are. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+where_are_nas <- function(data){
+  
+  na.cols <- which(colSums(is.na(data)) > 0)
+  sort(colSums(sapply(data[na.cols], is.na)), decreasing = TRUE)
+  
+}
+
+where_are_nas(df) #Missing values
+
+```
+
+Let's replace these missing values with the previously observed values.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+missing_cols <- where_are_nas(df) 
+
+missing_cols <- names(missing_cols)
+
+df <- df %>% 
+  do(tidyr::fill(., all_of(missing_cols), .direction = "updown")) # replace w/ previous values
+```
+
+So now that our data is complete WRT NAs, we need to see if the number of cases lines up with the way the data is organized in the features set right now. Both the features and labels sets have a week of year column, and a city column. If the order of these are equal across both the sets, we can assume that the number of cases can simply be joined to the features set. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+identical(df$city, as.factor(cases$city))
+identical(df$weekofyear, cases$weekofyear)
+
+```
+
+The columns are equal across the sets. There are two cities we need to forecast for, San Juan and Iquitos. Let's see if each city has the same period of time for their respective observations. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+df <- df %>% 
+  mutate(total_cases = cases$total_cases) %>% 
+  mutate(week_start_date = as.Date(week_start_date)) %>% 
+  mutate(month = lubridate::month(week_start_date))
+
+df_sj <- df %>% 
+  filter(city == "sj")
+
+df_iq <- 
+  df %>% 
+  filter(city == "iq")
+
+print(paste("The San Juan series begins on", head(df_sj$week_start_date, 1), 
+            "and ends on", tail(df_sj$week_start_date, 1)))
+
+print(paste("The Iquitos series begins on", head(df_iq$week_start_date, 1), 
+            "and ends on", tail(df_iq$week_start_date, 1)))
+```
+
+So the series have some overlap, but the observations for San Juan begin and end before the values of the Iquitos series. 
+
+## Exploratory Data Analysis
+
+First, let's take a look at the descriptive stats for each city. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+psych::describe(df_iq) %>% 
+  kableExtra::kable(caption = "Descriptive Stats: Iquitos")
+
+psych::describe(df_sj) %>% 
+  kableExtra::kable(caption = "Descriptive Stats: San Juan")
+```
+
+Next, let's take a look at the distribution of each city's case number.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+df_sj %>% 
+  ggplot(., aes(x = total_cases))+
+  geom_histogram(binwidth = 20)+
+  labs(title = "San Juan Case Distribution", x = "Cases")
+    
+
+df_iq %>% 
+  ggplot(., aes(x = total_cases))+
+  geom_histogram(binwidth = 20)+
+  labs(title = "Iquitos Case Distribution", x = "Cases")
+
+```
+
+Each series has a hard right skew, and we can see that in the Iquitos distribution, there is a large number of zero cases. Let's Now take a look at a correlation of the variables in the set WRT to total cases for each city. This is done in order to determine which variable's we may want to consider covariates in models moving forward. 
+
+```{r}
+cor_sj <- df_sj %>% 
+  select(!c(city, week_start_date)) %>% 
+  cor() %>% 
+  as.data.frame()
+
+cor_iq <- df_iq %>% 
+  select(!c(city, week_start_date)) %>% 
+  cor() %>% 
+  as.data.frame()
+
+cor_df <- data.frame("Features" = names(cor_sj),
+                     "SJ" = cor_sj$total_cases,
+                     "IQ" = cor_iq$total_cases)
+
+kableExtra::kable(cor_df, caption = "Featuers Correlations with Total Cases By City")
+
+  
+  
+```
+
+We'll consider using variables with greater than .15 (negative or positive) correlation values for each of the cities forecasts. Let's take a loom at a correlation plot so that we can get a sense of any of these potential predictors are strongly correlated w/ one another. Colinarity can cause issues in the evaluation of a model's $\beta$ coefficients, and their significance.
+
+```{r echo=FALSE, fig.height=10, message=FALSE, warning=FALSE}
+
+library(corrplot)
+sj_cor_cols <- cor_df %>% 
+  filter(SJ >.15 | SJ < -.15) %>% 
+  select(Features, SJ) %>% 
+  pivot_wider(names_from = Features, values_from = SJ) %>% 
+  colnames()
+
+iq_cor_cols <- cor_df %>% 
+  filter(IQ >.15 | IQ < -.15) %>% 
+  select(Features, IQ) %>% 
+  pivot_wider(names_from = Features, values_from = IQ) %>% 
+  colnames()
+
+df_sj %>%
+  select(!c(city, week_start_date)) %>%
+  select(all_of(sj_cor_cols)) %>% 
+  cor() %>%
+  corrplot()
+
+df_iq %>%
+  select(!c(city, week_start_date)) %>%
+  select(all_of(iq_cor_cols)) %>% 
+  cor() %>%
+  corrplot(type = "lower")
+  
+
+```
+
+Nothing seems too be too alarmingly correlated. The next visual's I want to take a look at is to see if there are any annual or monthly seasonality. The total case series for both cities follow a weekly period, but there may be more than one type of seasonality. In these series. I think the best way to gain some insight into this might be to plot average e cases in each month, and in each year of each series w/ error bars. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+df_sj %>%
+  mutate(month = as.factor(month)) %>% 
+  group_by(month) %>%
+  summarise(AVG_cases = round(mean(total_cases), 2),
+            SD = round(sd(total_cases), 2),
+            N= n()) %>% 
+  mutate(se = SD / sqrt(N),
+       lower = AVG_cases - qt(1 - (0.05 / 2), N - 1) * se, 
+       upper = AVG_cases + qt(1 - (0.05 / 2), N - 1) * se) %>% 
+  ggplot(aes(month, AVG_cases, fill = month)) +
+  geom_col() +
+  geom_errorbar(aes(ymin=lower, ymax=upper), width=.35)+
+  theme(legend.position = "none") +
+  labs(x = "Month", y = "Mean Cases", title = "San Juan Mean Cases Per Month")+
+  scale_fill_hue()
+
+df_iq %>%
+  mutate(month = as.factor(month)) %>% 
+  group_by(month) %>%
+  summarise(AVG_cases = round(mean(total_cases), 2),
+            SD = round(sd(total_cases), 2),
+            N= n()) %>% 
+  mutate(se = SD / sqrt(N),
+       lower = AVG_cases - qt(1 - (0.05 / 2), N - 1) * se, 
+       upper = AVG_cases + qt(1 - (0.05 / 2), N - 1) * se) %>% 
+  ggplot(aes(month, AVG_cases, fill = month)) +
+  geom_col() +
+  geom_errorbar(aes(ymin=lower, ymax=upper), width=.35)+
+  theme(legend.position = "none") +
+  labs(x = "Month", y = "Mean Cases", title = "Iquitos Mean Cases Per Month")+
+  scale_fill_hue()
+
+df_sj %>%
+  mutate(year = as.factor(year)) %>% 
+  group_by(year) %>%
+  summarise(AVG_cases = round(mean(total_cases), 2),
+            SD = round(sd(total_cases), 2),
+            N= n()) %>% 
+  mutate(se = SD / sqrt(N),
+       lower = AVG_cases - qt(1 - (0.05 / 2), N - 1) * se, 
+       upper = AVG_cases + qt(1 - (0.05 / 2), N - 1) * se) %>% 
+  ggplot(aes(year, AVG_cases, fill = year)) +
+  geom_col() +
+  geom_errorbar(aes(ymin=lower, ymax=upper), width=.35)+
+  theme(legend.position = "none") +
+  labs(x = "Year", y = "Mean Cases", title = "San Juan Mean Cases Per year")+
+  scale_fill_hue()
+
+df_iq %>%
+  mutate(year = as.factor(year)) %>% 
+  group_by(year) %>%
+  summarise(AVG_cases = round(mean(total_cases), 2),
+            SD = round(sd(total_cases), 2),
+            N= n()) %>% 
+  mutate(se = SD / sqrt(N),
+       lower = AVG_cases - qt(1 - (0.05 / 2), N - 1) * se, 
+       upper = AVG_cases + qt(1 - (0.05 / 2), N - 1) * se) %>% 
+  ggplot(aes(year, AVG_cases, fill = year)) +
+  geom_col() +
+  geom_errorbar(aes(ymin=lower, ymax=upper), width=.35)+
+  theme(legend.position = "none") +
+  labs(x = "Year", y = "Mean Cases", title = "iquitos Mean Cases Per year")+
+  scale_fill_hue()
+```
+
+So there is clearly a monthly seasonality component in both series. In the San Juan series, it appears that from September to January, the cases seem to rise, and in Iquitos cases tend to rise from September to February. We may want to consider this in modeling. In terms of annual seasonality, it would appear that there are a number of months in both series where the cases severely spike. That said, I am not sure if there is a discernible pattern (every other year, etc.) to determine seasonality, AND in terms of modeling, since we will be predicting future years cases, its not possible to include the years as a fact variable in a model. Let's now plot both series over time. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sj_ts <- ts(df_sj$total_cases, start = c(1990, 18), frequency = 52)
+
+iq_ts <- ts(df_iq$total_cases, start = c(2000, 26), frequency = 52)
+
+autoplot(sj_ts)+
+  ylab("Cases") +
+  ggtitle("San Juan Series")
+
+autoplot(iq_ts)+
+  ylab("Cases") +
+  ggtitle("Iquitos Series")
+```
+
+Let's now decompose both of these series. 
+
+```{r}
+autoplot(decompose(sj_ts, type = 'a'))+
+  ggtitle("SJ Additive Decomposition")
+
+autoplot(decompose(sj_ts, type = 'm'))+
+  ggtitle("SJ Multiplicative Decomposition")
+
+autoplot(decompose(iq_ts, type = 'a'))+
+  ggtitle("IQ Additive Decomposition")
+
+autoplot(decompose(iq_ts, type = 'm'))+
+  ggtitle("IQ Multiplicative Decomposition")
+  
+```
+
+Both series have quite a bit of seasonality left over in the remainder components.Probably due to the the monthly seasonality discussed previously in the bar plots. Let's decompose these series using STL. STL is an acronym for “Seasonal and Trend decomposition using Loess”, while Loess is a method for estimating nonlinear relationships 
+
+```{r}
+library(seasonal)
+
+sj_ts %>% 
+  stl(t.window = 13, s.window="periodic", robust=TRUE) %>%
+  autoplot() +
+  ggtitle("SJ STL Decomposition") 
+
+
+
+iq_ts %>% 
+  stl(t.window = 13, s.window="periodic", robust=TRUE) %>%
+  autoplot() +
+  ggtitle("IQ STL Decomposition")
+
+```
+
+## Models
+
+The evaluation metric we will consider in model selection is MAE per the competition guidelines.
+
+### Linear Model
+
+The first models I will train for both series is a time series linear regression. The models for both cities will include the trend of the series, and a dummy variable for each month.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+df_sj <- df_sj %>% 
+  select(all_of(sj_cor_cols)) %>% 
+  select(-year)
+
+df_iq <- df_iq %>% 
+  select(c(all_of(iq_cor_cols), month)) %>% 
+  select(-year)
+
+
+df_sj$month <- as.factor(month.abb[df_sj$month])
+
+df_iq$month <- as.factor(month.abb[df_iq$month])
+
+df_sj_ts <- ts(as.matrix(df_sj), start = c(1990, 18), frequency = 52)
+
+df_iq_ts <- ts(as.matrix(df_iq), start = c(2000, 26), frequency = 52)
+
+sj_tslm <- tslm(df_sj_ts[,"total_cases"] ~ trend + df_sj_ts[,"month"])
+
+summary(sj_tslm)
+
+print(paste("The MAE of the linear model for the "))
+
+iq_tslm <- tslm(df_iq_ts[,"total_cases"] ~ trend + df_iq_ts[,"month"])
+
+summary(iq_tslm)
+
+accuracy(sj_ts, sj_tslm$fitted.values)
+
+accuracy(iq_ts, iq_tslm$fitted.values)
+
+
+```
+
+The linear model does a pretty good job fitting the training data for the Iquitos series. We see in the Iquitos model as well that the dummies for the months are mostly insignificant. Let's refit this model w/o them to see if it fits better. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+iq_tslm2 <- tslm(df_iq_ts[,"total_cases"] ~ trend)
+
+summary(iq_tslm2)
+
+accuracy(iq_ts, iq_tslm2$fitted.values)
+```
+In terms of MAE the model performs relatively the same, but its $Adj. R^2$ score decreases considerably. Neither of these models will be considered as a final model, due to the non linearity of both the series, but this was a good jumping off point. I know know both series contain significant monthly seasonality. 
+
+
+### ARIMA
+
+For the ARIMA models, I will derive two $ARIMA(p,d,q)$ orders automatically. The first will use the functionality of `forecast::auto.arima` to account for seasonality directly by estimating the $(PDQ)$ component of the model is as such
+
+$$
+
+ARIMA(p,d,q)(P,Q,D)[m]
+
+$$
+
+The second will use `forecast::stlf(method = "arima")`. This function will forecast STL objects are obtained by applying a non-seasonal forecasting method to the seasonally adjusted data and re-seasonalizing using the last year of the seasonal component. Let's look at both series ACF and PACF plots
+
+```{r}
+Acf(sj_ts)
+
+Pacf(sj_ts)
+
+Acf(iq_ts)
+
+Pacf(iq_ts)
+```
+
+Both series demonstrate autocorrelation in their ACF plots, since the follow a sudosinal pattern. 
+
+Let's look at some features of this series that will give use a sense of its structure from an "ARIMA" point of view. We will determine if our series has a unit root, and needs to be differenced. I will use  the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test to stay consistent w/ the method used in the text. In this test, $Ho$ is that the data are stationary, and we look for evidence that the null hypothesis is false. Consequently, rejections of $Ho$ suggest that differencing is required.
+
+```{r}
+library(urca)
+
+diffs_sj <- sj_ts %>% 
+  ndiffs()
+
+print(paste("The number of differences the SJ series requires is", diffs_sj))
+
+diffs_iq <- iq_ts %>% 
+  ndiffs()
+
+print(paste("The number of differences the SJ series requires is", diffs_iq))
+```
+
+Both series require a first difference. Let's also go ahead and fit our models. We will set the seasonal param = FALSE because we have determined the weekly seasonality is not particularly prevalent in either series. For an xreg argument of additional predictors, the SJ series will use the following predictors which all have a correlation value of .17:
+
+  * reanalysis_air_temp_k
+  * reanalysis_avg_temp_k
+  * reanalysis_dew_point_temp_k
+  * reanalysis_specific_humidity_g_per_kg
+
+And for the IQ series: 
+
+  * reanalysis_dew_point_temp_k
+  * reanalysis_min_air_temp_k
+  * reanalysis_specific_humidity_g_per_kg
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sj_arima <- auto.arima(sj_ts, seasonal = F, xreg = as.numeric(
+  df_sj_ts[, "reanalysis_air_temp_k"],
+   df_sj_ts[, "reanalysis_avg_temp_k"],
+   df_sj_ts[, "reanalysis_dew_point_temp_k"],
+  df_sj_ts[, "reanalysis_specific_humidity_g_per_kg"]
+  ))
+
+summary(sj_arima)
+
+iq_arima <- auto.arima(iq_ts, seasonal = F, , xreg = as.numeric(
+  df_iq_ts[, "reanalysis_dew_point_temp_k"],
+  df_iq_ts[, "reanalysis_min_air_temp_k"],
+  df_iq_ts[, "reanalysis_specific_humidity_g_per_kg"]
+  ))
+
+summary(iq_arima)
+
+checkresiduals(sj_arima)
+
+checkresiduals(iq_arima)
+```
+
+In terms of MAE, the IQ series fits very well. For the SJ series, the MAE score of around 8 is not as good as we probably want to see on training data. Both models residuals are normally distributed, but follow serial autocorrelation. 
+
+We will now fit a second ARIMA model due to the literature written by Hyndman in his book " Forecasting, Principles and Practice". On the subject of series with weekly periods, he recommends using a dynamic harmonic regression model using Fourier terms. The advantages of this model are: "it allows any length seasonality and the short-term dynamics are easily handled with a simple ARMA error. The only real disadvantage (compared to a seasonal ARIMA model) is that the seasonality is assumed to be fixed — the seasonal pattern is not allowed to change over time. But in practice, seasonality is usually remarkably constant so this is not a big disadvantage except for long time series." (Hyndman) After tuning K iterative, I found the optimal values of K are 2 and 1 for the SJ and IQ series respectively
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+fourier_arima_sj <-auto.arima(sj_ts, seasonal=FALSE,  xreg=fourier(sj_ts, K=2))
+
+accuracy(fourier_arima_sj)
+                            
+fourier_arima_iq <- auto.arima(iq_ts, seasonal=FALSE, xreg=fourier(iq_ts, K=1))
+
+accuracy(fourier_arima_iq)
+
+checkresiduals(fourier_arima_sj)
+
+checkresiduals(fourier_arima_iq)
+```
+
+So the model w/ fourier terms performs better for the SJ series, but not for the IQ series. For both of these models we see residuals with normal distributions that follow white noise/ Both sets of residuals are serially correlated.
+
+### STL
+
+Another model we will consider per Hyndman is STL. Per Hydnman, the simplest way to handle weekly data is too "use an STL decomposition along with a non-seasonal method applied to the seasonally adjusted data". STL is an acronym for “Seasonal and Trend decomposition using Loess”. Loess is a method for estimating nonlinear relationships.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+submit_format <- read.csv("C:/Users/jawilliams/Desktop/Forecasting/Data/Final Data/submission_format.csv")
+
+submit_sj <- 
+  submit_format %>% 
+  filter(city == "sj")
+
+submit_iq <- 
+  submit_format %>% 
+  filter(city == "iq") 
+
+sj_stl <- stlf(sj_ts, h = length(submit_sj$city), method = "arima")
+
+accuracy(sj_stl)
+
+checkresiduals(sj_stl)
+
+
+
+
+iq_stl <- stlf(iq_ts, h = length(submit_iq$city))
+
+accuracy(iq_stl)
+
+checkresiduals(iq_stl)
+
+```
+
+AFter tuning which forecasting method to use STL with, I found that the SJ series minimized the MAE score on the training data using an ARIMA model, and the IQ series used an exponential smoothing model: ETS(A,N,N). "ANN" is simple exponential smoothing with additive errors. These seem to be the best fitting models, and I will elect to use them as the models to forecast the out of sample submission values with. 
+
+## Forecasting
+
+There was no test data provided in terms of number of cases. Additionally the format requires out of sample forecasts to be submitted. Therefore, we cannot further validate the models built, but instead examine what the forecasts look like compared to the series we fit with. Both STL models performed best, so their forecasts will be used in submission. These models were selected because they had the lowest MAE score, which is the metric to be minimized per the submission details. 
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+autoplot(sj_ts) +
+  autolayer(sj_stl$fitted, series = "Fitted Values")+
+  autolayer(sj_stl$mean, series = "Out Of Sample Forecasts")+
+  ggtitle(paste("SJ Forecasts From", sj_stl$method))+
+  ylab("Cases")
+
+autoplot(iq_ts) +
+  autolayer(iq_stl$fitted, series = "Fitted Values")+
+  autolayer(iq_stl$mean, series = "Out Of Sample Forecasts")+
+  ggtitle(paste("SJ Forecasts From", iq_stl$method))+
+  ylab("Cases")
+
+
+
+```
+
+## Conclusion
+
+In summation, I think my modes performed very well. The limitations in my methods are that I did not iterative tune some parameters in the models I selected. Additionally, I think training a NNAR, or a VAR model might have been worth the consideration. I chose not to use such methods because for weekly data, it was recommended that the Fourier term ARIMA model, and STL decomposition be used. I think overall my forecasts perform well. One other sort of validation that I could have done is train models on a subset of the observations, evaluate using a test set subset, then sample out of forecast. That said, both series fit the training data well, and my forecasts seem to follow the general structure of the observed training values. The only thing my forecasts seem to not potential be able to account for are potential massive outbreaks seen in both series. 
+

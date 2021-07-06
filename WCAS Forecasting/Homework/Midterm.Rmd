@@ -1,0 +1,325 @@
+---
+title: "ADEC 746001 Predictive Analytics Midterm"
+author: "James Williams"
+date: "7/19/2020"
+output:
+  pdf_document: default
+  word_document: default
+---
+# Introduction
+
+The purpose of this assignment will be to attempt to forecast restaurant visitors. The data, and problem come from **[a Kaggle competition titled 'Recruit Restaurant Visitor Forecasting'](https://www.kaggle.com/c/recruit-restaurant-visitor-forecasting/data)** The data specifically comes from a Japanese reservation, cash register, and point of sale operating system (POS) named AirREGI / Restaurant Board. It includes unique ID's from the AIR system for each restaurant (from this point forward these will be referred to as firms), categories for the types of food they serve, the times reservations were made, the time it was scheduled for, the number of visitors scheduled in each reservation, the datetime for each observed visit in each firm, and the number of visitors. There is also a sample submission file that shows how the forecasts should be formatted, and provides the range of dates the forecasts should be made from. 
+
+This problem merits consideration for several reasons. From a general overview, being able to predict daily values based on previous observations over time generates great utility for those who are able. An example of where having advanced skills in daily time-series forecasting is day trading. Additionally, separate from the world of finance, it is essential for firms to be able to predict the number of consumers that will interact with them to purchase their goods and/or services. This allows insights for industrial organization. Firms must be able to anticipate future revenue accurately to plan on labor expenses and future capital investment decisions. This same logic can be applied to being able to forecast visitors for the firms this study will consider. Specifically in the restaurant industry, gaining insights into future number of visitors allows for firms to schedule enough staff to satisfy the future demands they face, potentially invest in new capital to handle more orders (an example being a pizza parlor adding a new oven because they anticipate selling more pizzas), accurately purchase ingredients to satisfy orders. there a number of factors that contribute to the number of visitors that may visit these firms in the future. The main focus of this study will to be to consider time, and any sort of patterns, trends, and seasonal components that may have explained visitors these firms experienced in the past. There are another of other factors that could contribute to the number of visitors these firms will experience in a day. Examples of these include weather, and holidays. This study will attempt to control for these exogenous factors as possible. 
+
+# Exploratory Data Analysis
+
+First, we will take a look at the number of visitors these firms experience in the observed time the data provides. All of the data provided is complete. There are no missing values. First lets gain some insight on the series of expect visitors from reservations, and the actual number of visitors observed for all of the firms. Figures 1 & 2 below provide us with descriptive statistics of both
+
+### Figures 1 & 2
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(forecast)
+library(dplyr)
+library(seasonal)
+library(ggplot2)
+library(tidyr)
+library(stringr)
+library(lubridate)
+library(scales)
+library(psych)
+library(gt)
+library(kableExtra)
+
+setwd("C:/Users/jawilliams/Desktop/Forecasting/Data/Midterm Data")
+
+
+air_reserve <- read.csv("air_reserve.csv", stringsAsFactors = F)
+
+air_store_info <- read.csv("air_store_info.csv", stringsAsFactors = F)
+
+air_visit_data <- read.csv("air_visit_data.csv", stringsAsFactors = F)
+
+date_info <- read.csv("date_info.csv", stringsAsFactors = F)
+
+air_reserve %>% 
+  select(reserve_visitors) %>% 
+  describe() %>% 
+  as_tibble() %>% 
+  gt() %>% 
+  tab_header(title = "Expected Visitors From Reservations Descriptive Statitsics") %>% 
+  gt::ggplot_image()
+
+air_visit_data %>% 
+  select(visitors) %>% 
+  describe() %>% 
+  as_tibble() %>% 
+  gt() %>% 
+  tab_header(title = "Observed Visitors Descriptive Statitsics") %>% 
+  gt::ggplot_image()
+
+```
+
+It can be seen that these series differ greatly in lengths. Let's see if the number of restaurants, or the dates differ in these series at all. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+air_reserve_sums <- air_reserve %>% 
+  mutate(visit_datetime = as.Date(visit_datetime)) %>% 
+  group_by(visit_datetime) %>% 
+  summarise(Visits = sum(reserve_visitors)) %>% 
+  rename(Date = visit_datetime)
+
+air_visit_sums <- air_visit_data %>% 
+  mutate(visit_date = as.Date(visit_date)) %>% 
+  group_by(visit_date) %>% 
+  summarise(Visits = sum(visitors)) %>% 
+  rename(Date = visit_date)
+  
+
+print(paste("The expected visitors from reservations series begins on", head(air_reserve_sums$Date, 1), "and ends on", tail(air_reserve_sums$Date, 1)))
+
+print(paste("The observed visitors series begins on", head(air_visit_sums$Date, 1), "and ends on", tail(air_visit_sums$Date, 1)))
+
+print(paste("There are", length(unique(air_reserve$air_store_id)), "unique firms in the expected visitors from reservations series"))
+
+print(paste("There are", length(unique(air_visit_data$air_store_id)), "unique firms in the observed visitors series"))
+      
+      
+```
+
+The observed visitors series ends about a month after the expected visitors series. Additionally the observed visitors series has about 500 more firms than the expected series. It may be useful to see at this point if we should really consider the expected series much further. If we plot the sums of the observed visitors series and the sum of the expected visitors, we can get a sense of the relationship between the two. We ill group the date by firms, so that instead of the visits across all unique firms, we will consider the sum of all firms visits on a given day. Since there are so many firms, it is best to get a sense of this series in this format, then iterativley forecast each firm later on.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+reserve_firms <- unique(air_reserve$air_store_id) 
+
+air_reserve_sums_small <- 
+  air_reserve %>%
+  mutate(visit_datetime = as.Date(visit_datetime)) %>% 
+  filter(visit_datetime <= "2017-04-22") %>% 
+  select(-reserve_datetime)%>% 
+  group_by(visit_datetime) %>% 
+  summarise(Visits = sum(reserve_visitors)) %>% 
+  rename(Date = visit_datetime)
+
+air_reserve_dates <- unique(air_reserve_sums_small$Date)
+
+air_visit_reserve <- air_visit_data %>% 
+  mutate(visit_date = as.Date(visit_date)) %>% 
+  filter(air_store_id %in% reserve_firms) %>%  
+  group_by(visit_date) %>% 
+  summarise(Visits = sum(visitors)) %>% 
+  rename(Date = visit_date) %>% 
+  filter(Date %in% air_reserve_dates) %>% 
+  mutate(Reservations = air_reserve_sums_small$Visits)
+
+air_visit_reserve %>% 
+  pivot_longer(-Date, names_to = "Interaction", values_to = "Visitors") %>%
+  ggplot(., aes(y = Visitors, x = Interaction, fill = Interaction))+
+  geom_col(stat = "identity")+
+  ggtitle("Number of Expected Visitors From Reservations Versus Observed Visitors")
+  
+
+  
+
+```
+
+We can see there are many less expected visitors in the data than there are observed. This could be problematic to our forecasts. If we are seeing a general pattern of less expected visits than observed, we can conclude it is in the best interest of a profit maximizing firm to forecast the series where that objective is reached. If firms forecast for reservations, they will under staff, purchase insufficient quantities of materials and ingredients, and potentially avoid investments in capital that are warranted with the actual number of guests that they are serving. At this point in the study, we can solely turn our focus to the observed visitors series, and make forecasts based on those dates. Let's plot the series of the sums of the firms over time. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+air_visit_series <- air_visit_data %>% 
+  mutate(visit_date = as.Date(visit_date)) %>% 
+  filter(air_store_id %in% reserve_firms) %>%  
+  group_by(visit_date) %>% 
+  summarise(Visits = sum(visitors)) %>% 
+  rename(Date = visit_date)
+
+  air_visit_series %>% 
+    ggplot(., aes(x = Date , y = Visits)) +
+    geom_line() +
+    xlab("Time") +
+    ylab("# of Visitors") +
+    ggtitle("Visitors From 2016-01-01 to 2017-04-22")
+
+```
+
+So this is a pretty interesting series. It follows sort of a step ladder format. The number of visitors increased drastically from 2016-07 onward. It should also be noted that there are significant declines in  observed visitors on Jan. 1 of the two years the series spans. It's sort of difficult right now to see if there is a large seasonality component. If we were able to decompose this series, we would be able to gain some insight into the different components of this summed series. We are not able too in this case, because we have less than two periods (cyclical years) of observed data. We can however plot some bar charts that will maybe allow us to leverage some insights into how this series behaves in particular months, or days of the week. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+air_visit_series %>%
+  mutate(wday = wday(Date, label = TRUE, week_start = 1)) %>%
+  group_by(wday) %>%
+ summarise(AVG_visits = round(mean(Visits), 2),
+            SD = round(sd(Visits), 2),
+            N= n()) %>% 
+  mutate(se = SD / sqrt(N),
+       lower = AVG_visits - qt(1 - (0.05 / 2), N - 1) * se, 
+       upper = AVG_visits + qt(1 - (0.05 / 2), N - 1) * se) %>% 
+  ggplot(aes(wday, AVG_visits, fill = wday)) +
+  geom_col() +
+  geom_errorbar(aes(ymin=lower, ymax=upper), width=.35)+
+  theme(legend.position = "none", axis.text.x  = element_text(angle=45, hjust=1, vjust=0.9)) +
+  labs(x = "Day of the week", y = "Mean visitors", title = "Mean # Of Visitors By Week Day") +
+  scale_fill_hue()
+
+air_visit_series %>%
+  mutate(month = month(Date, label = TRUE)) %>%
+  group_by(month) %>%
+  summarise(AVG_visits = round(mean(Visits), 2),
+            SD = round(sd(Visits), 2),
+            N= n()) %>% 
+  mutate(se = SD / sqrt(N),
+       lower = AVG_visits - qt(1 - (0.05 / 2), N - 1) * se, 
+       upper = AVG_visits + qt(1 - (0.05 / 2), N - 1) * se) %>% 
+  ggplot(aes(month, AVG_visits, fill = month)) +
+  geom_col() +
+  geom_errorbar(aes(ymin=lower, ymax=upper), width=.35)+
+  theme(legend.position = "none") +
+  labs(x = "Month", y = "Median visitors", title = "Mean # Of Visitors By Month")+
+  scale_fill_hue()
+```
+
+So as expected, there is a subseasonal weekly component of the summed series. Just by a quick error bar examination of the weekly means plot, we see that the beginning of the week see's significantly less customers on average than the weekends. Additionally, we also see that average customers are lower in the months of Jan - Feb, rise in March, fall through the spring rise and stay consistent in the summer and fall, and finally rise to the highest level in December. These seasonal components will need to be accounted for in our models. Finally, the data from Kaggle provides a breakdown of the holiday's observed in this series, let's see what dates these holiday's fall on in the summed series, and what the number of visitors are for those dates. 
+
+
+```{r}
+holidays <- date_info %>% 
+  mutate(calendar_date = as.Date(calendar_date)) %>% 
+  filter(holiday_flg == 1) %>% 
+  rename(Date = calendar_date)
+
+holiday_vists <- air_visit_series %>% 
+  filter(Date %in% holidays$Date)
+
+
+holidays <- holidays %>%
+  filter(Date %in% holiday_vists$Date) %>% 
+  mutate(Visitors = holiday_vists$Visits)
+
+holidays %>% 
+  rename(Weekday = day_of_week) %>% 
+  mutate(Weekday = wday(Date, label = TRUE,  week_start = 1)) %>% 
+  ggplot(.,aes(x = Date, y = Visitors, color = Weekday))+
+  geom_point()+
+  geom_hline(yintercept = mean(air_visit_series$Visits), linetype = "dashed", color = "red")+
+  labs(title = "Number of Visitors On Holidays")
+```
+
+This plot shows the number of visitors on the holiday's observed in the series. The red line is the mean of the summed series (4553.866)
+
+
+# Models 
+
+The models that we will train and evaluate in order to make our forecasts are an ARIMA model (the order will be generated for us) with and without a Fourier series and a TBATS model. Any sort of ETS model will be avoided because ETS models are generally optimal for shorter period lengths such as monthly and quarterly, as opposed to daily.The motivation to use these models comes from the fact that we are dealing with complex seasonality. We can see from the bar charts from the average visitors by week days and months that weekends are busier than weekdays, and that their is a cyclical seasonal component in this series. This means we have a sort of "layered" seasonality in the data. ARIMA stands for autoregressive integrated moving average. The AR part of ARIMA indicates that the evolving variable of interest is regressed on its own lagged (i.e., prior) values. The MA part indicates that the regression error is actually a linear combination of error terms whose values occurred contemporaneously and at various times in the past (Box) . I decided to use an standard ARIMA model sort of as a baseline, but what I am most interested in is the other two models. The motivation to use these models comes from literature written by Robert Hyndman. On using ARIMA with Fourier terms he claims the advantages are that is allows for any length of seasonality, allows for multiple types of seasonalities, and seasonalities with larger variance can be handled by increasing the value of the hyperparamter K (Hydnman 2010). This sounds a lot like the data in question. We can see multiple seasonal components (monthly and weekly) in a daily period series. Additionally, I can tune K by testing it over a range of values such that K minimizes the AIC score of the fitted models. It turns out that the optimal K = 19 in my derivation, so it also reinforces the fact that this is a promising candidate for a model that may perform well. TBATS is also an appealing model candidate, because it provides a "means of decomposing complex seasonal time series, which cannot be decomposed using any of the existing decomposition methods." (Hyndman, Livera, Snyder) There is not enough observations in this series to perform any sort of classical decomposition. TBATS provides an alternative approach that boats "excellent forecasting performance over a range of prediction horizons", and uses  "trigonometric decomposition leads to the identification and extraction of seasonal components, which are otherwise not apparent in the time series plot itself." (Hyndman, Livera, Snyder) Once again, TBATS is a promising model canidate because we have complex seasonality components that are not at face value apparent in the data. We will use the best performin model of these three to forecast the number of visitors in each restaurant from the best performing test model. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+## MAke TS
+
+visits_ts <- ts(air_visit_series$Visits, 
+                start = c(2016,1), 
+                end = c(2017, 
+                        as.numeric(
+                          strftime(
+                            as.POSIXct(
+                              tail(
+                                air_visit_series$Date, 1)), "%j"))),
+                frequency = 365)
+
+
+
+## Train and test splits
+
+train <- window(visits_ts, end = c(2017, 
+                                   as.numeric(
+                                     strftime(as.POSIXct(
+                                       "2017-02-28"), "%j"))))
+
+test <- window(visits_ts, start = c(2017, 
+                                   as.numeric(
+                                     strftime(as.POSIXct(
+                                       "2017-03-01"), "%j"))))
+## Iterate over models to find K W/ Lowest AIC
+memory.size(10000000000000)
+
+## Fit Models
+
+fit_arima <- auto.arima(train)
+
+fit_arima_fourier <- auto.arima(train, 
+                                seasonal = FALSE, 
+                                xreg=fourier(train, K = 19))
+
+
+fit_TBATS <- tbats(train)
+
+## fcst length of test
+
+arima_fcsts <- forecast(fit_arima, h = length(test))
+
+arima_fourier_fcsts <- forecast(fit_arima_fourier, 
+                  xreg = fourier(train, K=19, length(test)),
+                  h = length(test))
+
+TBATS_fcsts <- forecast(fit_TBATS, h = length(test))
+
+gt(
+  as_tibble(accuracy(arima_fcsts, test))
+) %>% 
+  tab_header("ARIMA(5,1,3) Model Selection Metrics") %>% 
+  gt::ggplot_image()
+
+gt(
+  as_tibble(accuracy(arima_fourier_fcsts, test))
+) %>% 
+  tab_header("Fourier ARIMA(5,1,3), K=19 Model Selection Metrics") %>% 
+  gt::ggplot_image()
+
+gt(
+  as_tibble(accuracy(arima_fourier_fcsts, test))
+) %>% 
+  tab_header("BATS (0.187, {5,3}) Model Selection Metrics") %>% 
+  gt::ggplot_image()
+```
+
+Based on the traditional model accuracy metrics, none of the model choices are all too impressive. That being said, the standard ARIMA model greatly outperforms the other two. It looks like the TBATS and the Fourier ARIMA models are actually the same based on the evaluation metrics. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+autoplot(visits_ts) +
+  autolayer(arima_fcsts, series = "Forecasts", PI = F)+
+  ggtitle("Training Model Forecast ARIMA(5,1,3)") + 
+  ylab("Visitors")
+```
+
+The model does a pretty good job at the beginning of the forecasts of the test data, but quickly begins to under forecast the remainder of the series. Let's look at plots of the residuals, the distribution of them, and the forecast errors.
+
+
+```{r echo=FALSE}
+cbind('Residuals' = residuals(fit_arima),
+      'Forecast errors' = residuals(fit_arima,type='response')) %>%
+  autoplot(facet=TRUE) + xlab("Year") + ylab("") + 
+  ggtitle("Residuals and Forecast Errors From ARIMA(5,1,3)")
+
+hist(fit_arima$residuals, col = "grey", main = "ARIMA(5,1,3)",
+     xlab = "Visitors")
+
+```
+
+So the residuals are pretty normal, and the plot of them seems to follow random, white noise pattern, in general. There does not appear to be any seasonality unaccounted for, but possibly some of the trend variations seen in the plot of the series are unaccounted for in the forecasts. Let's forecast from 2017-04-22 to  2017-05-31. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+fit_arima <- auto.arima(visits_ts)
+
+arima_fcsts <- forecast(fit_arima, h = 39)
+
+autoplot(visits_ts) +
+  autolayer(arima_fcsts, series = "Forecasts", PI = F)+
+  ggtitle("Training Model Forecast ARIMA(5,1,3)") + 
+  ylab("Visitors")
+```
+
+So as before, the forecasts look pretty good early on, but later they revert to a much small range of values that is seen later in the series. 
+
+The objective of this Kaggle competition is to forecast the number of visitors for each restaurant in the data. As stated before, there are 829 in our data, and we need to forecast values for. We can do this iteratively using ARIMA models like before. Since the individual series look different from the overall totals, we will allow the models to choose their orders on their own. model we fit before. The values will be stored in the "Midterm Forecasts.csv" file submitted with this study.
+
+# Conclusion
+
+In conclusion, this was a very hard series to forecast. It consists of an irregular trend, it is a mean reverting series for the early part of 2016, then greatly increases to a new mean reverting series for the remainder of that year. Additionally in the beginning of 2017, it sees a violent drop, then drastically reverts back to the mean reverting pattern There is no discernible seasonality at face value. Upon further investigation, there appears to be a weekly seasonal component, and a monthly seasonal component. When attempting to use multi-seasonal forecasting techniques, they performed worse than a standard ARIMA model. The forecasts that were made on the average series of all the firms in the series were under forecast when the model was trained, and tested. Additionally, the out of sample forecasts seem to be under forecast in the latter part of that series. The violent drop in 2017 has a very negative impact on the forecasts. They are under fecast because of it. I would be interested in revisiting this study after learning some more advanced forecasting techniques later in the course this study is conducted for, and after some exposure to dealing with drastic, irregular volatility in a mean reverting series, as seen in the increase in the middle of 2016, and the sudden decrease at the beginning of 2017. 
