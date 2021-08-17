@@ -6,57 +6,89 @@ author: "james williams"
 output:
   html_document:
     number_sections: TRUE
+editor_options: 
+  markdown: 
+    wrap: sentence
 ---
 
 <p style="color:red">
+
 *The assignment is worth **100 points**. There are **25 questions**. You should have the following packages installed:*
+
 </p>
 
 ```{r setup, results='hide', message=FALSE, warning=FALSE}
-library(tidyverse)
+library(dplyr)
+library(tidyr)
 library(cowplot)
 library(sandwich)
 library(lmtest)
+library(kableExtra)
 ```
 
-In this problem set you will summarize the paper ["Individual Behavior and Group Membership: Comment"](https://www.aeaweb.org/articles?id=10.1257/aer.99.5.2247) (Sutter, AER 2009) and recreate its findings. 
+In this problem set you will summarize the paper ["Individual Behavior and Group Membership: Comment"](https://www.aeaweb.org/articles?id=10.1257/aer.99.5.2247) (Sutter, AER 2009) and recreate its findings.
 
 # Big picture
 
 **1. What is the main question asked in this paper?**
-  This paper titled 'Individual Behavior and Group Memebership: Comment' aims to establish or uncover any similarity or similarities  between the process of descion making within the confines of a team, and that of an individual making descions subject to being a member of a group. Essentially, this study is attempting to show that the membership of a group, whether it be saleint membership, or team membership where descions must be unaminously coordinated, changes the strategic descion-making process of a subject, whether or not an outgroup exists. 
+
+This paper titled 'Individual Behavior and Group Membership: Comment' aims to establish or uncover any similarity or similarities between the process of decision making within the confines of a team, and that of an individual making decisions subject to being a member of a group.
+Essentially, this study is attempting to show that the membership of a group, whether it be salient membership, or team membership where decisions must be unanimously coordinated, changes the strategic decision-making process of a subject, whether or not an outgroup exists.
 
 **2. Summarize the experiment methodology. Make sure to explain: a) how the investment task works, including an explanation of the payoff function to a subject, and b) why the task is "nonstrategic".**
-  The expriment is conducted as followed: 
-    * Subjects recieve 100 euro-cents = €1 in every round of a nine round game.
-    * Each round they must choose to invest an alloted amount of the budget. 
-    * There is a 1/3 (33%) chance of returning 2.5x the initial investment, when x=invested ammount. This can be represented by the return  function Return= 1/3(100+2.5x). When x is the entire budget of 100 euro-cents, then the highest expected value is $116.67. There is a 2/3 (66%) chance of that the investment is lost Loss= 2/3(100- x). 
-    *The task is non-strategic because there is no gamesmanship of competetive aspect to this experiment. Investments are made in a vacum.Each round you recieve €1 to use, and losses or gains from previous rounds are not penalized or realized in investments in further rounds. Although they were infomed about performce in previous rounds, these losses or gains do not affect their choices in further investment, and thus each desicion is isloated, as a one time choice, making the game non strateic. 
-    
+
+The experiment is conducted as followed:
+
+-   Subjects receive 100 euro-cents = €1 in every round of a nine round game.
+-   Each round they must choose to invest an allotted amount of the budget.
+-   There is a 1/3 (33%) chance of returning 2.5x the initial investment, when $x$ = invested amount. This can be represented by the return function $Return = 1/3(100+2.5x)$. When $x$ is the entire budget of 100 euro-cents, then the highest expected value is 116.67.
+-   There is a 2/3 (66%) chance of that the investment is lost $Loss = 2/3(100- x)$.
+-   The task is non-strategic because there is no gamesmanship of competitive aspect to this experiment. Investments are made in a vacuum. Each round you receive €1 to use, and losses or gains from previous rounds are not penalized or realized in investments in further rounds. Although they were informed about performance in previous rounds, these losses or gains do not affect their choices in further investment, and thus each decision is isolated, as a one time choice, making the game non strategic.
+
 **3. Explain the differences between each treatment.**
-  1. Individual vs Team
-    * Decision maker is either on his own, or a member of a 3 person team. The rules of membeship are as followed:
-        a.) Choices must be unamious within the team
-        b.) each member recvies the reurned amount. If the max expected value of the game is realized (116.67 euro-cents)
-        each tam member gains that amount. 
-  2. Payoff Commonality & Message Exchange
-    * Descions in this treatment are made by indiviudals, but they are members of groups. These groups are formed of three random participants of the study.
-    * In the treatment coded PAY-COMM, member 1 chooses for rounds 1-3, member 2 for rounds 4-6, and member 3 for rounds 7-9. Members remain nameless and anonomous
-    * There is no communication betwen members, the only thing they share is the ammount won by a respective member in a given round. The members not participating are informed of the outcome of each round they are not participating in. 
-    *The treatment coded MESSAGE is identical to PAY_COMM, except messages can be provided the the member currently choosing. The meber choosing recieves messages before they make a descions from the non participating members of the round. Anonminity is retain as in PAY-COMM. 
-    * Results from these treatmets were compared to the baseline of individuals making choices without beloning to a team or group.
-  3. Influence of Team Decision Making on Individual Choices
-    * Treatment coded MIXED aims to unearth this.
-    * Members make individual choices from rounds 1-3. No communication or payoff commonality.
-    * Rounds 4-6 subjects are linked into 3 member teams. They are introduced in an online chat queue, where they can communicate (must remain anonmous), and must come to a unamious choice. Payoff commonality applies. 
-    * Rounds 7-9 individuals are isolated once again, and these rounds are identical to rounds 1-3. 
-    
+
+1.  Individual vs Team
+
+    -   Decision maker is either on his own, or a member of a 3 person team.
+        The rules of membership are as followed:
+
+            a.) Choices must be unanimous within the team
+
+            b.) Each member receives the returned amount. If the max expected value of the game is realized (116.67 euro-cents) each tam member gains that amount.
+
+2.  Payoff Commonality & Message Exchange
+
+    -   Decisions in this treatment are made by individuals, but they are members of groups.
+    -   These groups are formed of three random participants of the study.
+    -   In the treatment coded PAY-COMM, member 1 chooses for rounds 1-3, member 2 for rounds 4-6, and member 3 for rounds 7-9.
+    -   Members remain nameless and anonymous.
+    -   There is no communication between members, the only thing they share is the amount won by a respective member in a given round.
+    -   The members not participating are informed of the outcome of each round they are not participating in.
+    -   The treatment coded MESSAGE is identical to PAY_COMM, except messages can be provided the the member currently choosing. The member choosing receives messages before they make a decisions from the non participating members of the round. Anonymity is retained as in PAY-COMM.
+    -   Results from these treatments were compared to the baseline of individuals making choices without belonging to a team or group.
+
+3.  Influence of Team Decision Making on Individual Choices
+
+    -   Treatment coded MIXED aims to unearth this.
+    -   Members make individual choices from rounds 1-3.
+    -   No communication or payoff commonality.
+    -   Rounds 4-6 subjects are linked into 3 member teams. They are introduced in an online chat queue, where they can communicate (must remain anonymous), and must come to a unanimous choice.
+    -   Payoff commonality applies.
+    -   Rounds 7-9 individuals are isolated once again, and these rounds are identical to rounds 1-3.
+
 **4. Summarize the main results of the paper.**
 
-The first result of the paper is that the membership of a salient group causes an individual to make descions differently than if that person were acting on their own. Furthermore, there need not be an outgroup, nor a strategic setting for this behavior to differentiate. The second finding of the paper is that there is no distinguishable difference between team descion making, and that of an individual who is a member of a salient group. The final result of this paper is that the experience of making descions within the confines of a team affects descions an individual makes outside of these confines, or on his/her own. 
+The first result of the paper is that the membership of a salient group causes an individual to make anonymity differently than if that person were acting on their own.
+Furthermore, there need not be an outgroup, nor a strategic setting for this behavior to differentiate.
+The second finding of the paper is that there is no distinguishable difference between team decision making, and that of an individual who is a member of a salient group.
+The final result of this paper is that the experience of making decisions within the confines of a team affects decisions an individual makes outside of these confines, or on his/her own.
 
-**5. Why are these results valuable? What have we learned? Motivate your discussion with a real-world example.**
-These results are valuable because they give very important insight into the way humans behave than is accounted for in neoclassical economic models. essentially, group membership, whether it be mere membership or parameterized within a team, changes the choices people make. They act more agressively and in sync in prisoners dilema scenarios. We can gain insight to the fact that people will consider their families, groups they are members of, when making choices. A specific example may be that a band may not choose to tour in a Southern American town or city during football season, where football is championed and adored.. This is because it knows members of the community, which is a large group, will be more inclided to attend the game, even if they or their loved ones are not directly involved. 
+**5. Why are these results valuable? What have we learned? Motivate your discussion with a real-world example.** 
+
+These results are valuable because they give very important insight into the way humans behave than is accounted for in neoclassical economic models.
+Essentially, group membership, whether it be mere membership or parameterized within a team, changes the choices people make.
+They act more aggressively and in sync in prisoners dilemma scenarios.
+We can gain insight to the fact that people will consider their families, groups they are members of, when making choices.
 
 # Replication
 
@@ -66,21 +98,12 @@ These results are valuable because they give very important insight into the way
 
 ```{r}
 # your code here
-df= read.csv("/Users/james/desktop/be_bc_f19/ps1/sutterexperiment.csv")
-df<-
-  df %>% 
-  rename_at(vars(starts_with("S")), funs(str_replace(., "S", "s")))
+df <-
+  read.csv("C:/Users/jawilliams/Documents/WCAS/WCAS Behavioral/Data/sutterexperiment.csv")
 
-df<-
-  df %>% 
-   rename_at(vars(starts_with("R")), funs(str_replace(., "R", "r")))
+names(df) <- tolower(names(df))
 
-df<-
-  df %>% 
-   rename_at(vars(starts_with("T")), funs(str_replace(., "T", "t")))
-
-head(df)
-
+names(df)
 
 ```
 
@@ -88,44 +111,51 @@ head(df)
 
 ```{r}
 # your code here
-df=
+df <-
   df %>%
-    mutate(uniquesubject = paste(session,treatment,subject, sep= "_"))
+  mutate(uniquesubject = paste(session, treatment, subject, sep = "_"))
     
 ```
 
 **8. Similarly, create a variable called "uniqueteam" that contains unique team identifiers. Do it so that the variable has the same values as `subjectid` for all subjects in the INDIVIDUALS treatment.**
+
 ```{r}
-df=
+df <-
   df %>%
-    mutate(uniqueteam = paste(session, team, sep = "_")) 
-```
-```{r}
-df$uniqueteam= if_else(df$treatment=="INDIVIDUALS", df$uniquesubject, df$uniqueteam)
+  mutate(uniqueteam = paste(session, team, sep = "_"))
+
+df$uniqueteam <-
+  if_else(df$treatment == "INDIVIDUALS", df$uniquesubject, df$uniqueteam) 
 ```
 
 **9. Create a new dataframe called `df_narrow` that converts `df` to "narrow form" (also known as "long form") using [`gather()`](https://tidyr.tidyverse.org/reference/gather.html) and arranges observations by `session, subject, treatment, team` using [`arrange()`](https://dplyr.tidyverse.org/reference/arrange.html).**
 
-```{r}
-# your code here
-df_narrow= df %>% 
-  gather(rounds, investment, r1:r9) %>% 
-  arrange(session, subject, treatment, team)
-```
+I have updated the code in this question to use `tidyr::pivot_longer` as `tidyr::gather` is deprecated.
 
+```{r echo=TRUE}
+# your code here
+df_narrow <- df %>%
+  pivot_longer(c(r1:r9), 
+               names_to = "rounds",
+               values_to = "investment") %>%
+  arrange(session, subject, treatment, team) 
+
+kable(head(df_narrow))
+```
 
 **10. Notice that all the values for the variable `round` are prepended with "r". Remove it using [`gsub()`](https://astrostatistics.psu.edu/su07/R/html/base/html/grep.html).**
-```{r}
-df_narrow$rounds= gsub("R"," ", df_narrow$rounds)
-head(df_narrow)
 
+```{r}
+df_narrow$rounds <- gsub("r", " ", df_narrow$rounds)
+
+unique(df_narrow$rounds)
 ```
 
-
-<p style="color:red">
-*Note: After questions 7-9 your dataframe `df_narrow`  should look like `sutterexperiment_long.csv`.*
 <p style="color:red">
 
+*Note: After questions 7-9 your dataframe `df_narrow` should look like `sutterexperiment_long.csv`.*
+
+<p style="color:red">
 
 ## Summary table and plot
 
@@ -133,262 +163,256 @@ head(df_narrow)
 
 ```{r}
 # your code here
-df_narrow %>% 
-  group_by(treatment) %>% 
-  select(subject, team, investment) %>% 
-  summarise_all(funs(mean, sd))
-#I decided to not include the non-numeric vairables(uniqueteam, uniquesubject, and round, because they returned N/A values for mean and sd as they are non numeric.)
+df_narrow %>%
+  group_by(treatment) %>%
+  select(subject, team, investment) %>%
+  summarise_all(funs(mean, sd)) %>% 
+  kable()
+
 ```
 
 **12. Create a bar plot that displays the mean of each treatment and error bars that display the standard errors of the means. Color each bar gray. Make sure to title the axes and the plot. The subtitle should tell the reader the error bars display the standard error of the mean. Use `theme_classic()` to display the plot.**
 
 ```{r}
-bar.plot <- df_narrow %>% 
-  group_by(treatment) %>% 
-  ggplot(., aes(treatment, investment, fill=treatment)) + 
-  stat_summary(fun.y = mean, geom = "bar", fill="gray69") + 
-  stat_summary(fun.data = mean_se, geom = "errorbar", width=0.1) + 
-  labs(y="Average Investment", x="Treatment", title = 'Avg Investment by Treatment', subtitle = 'Error Bar= Standard Errors')+
+df_narrow %>%
+  group_by(treatment) %>%
+  ggplot(., aes(treatment, investment, fill = treatment)) +
+  stat_summary(fun.y = mean, geom = "bar", fill = "gray69") +
+  stat_summary(fun.data = mean_se,
+               geom = "errorbar",
+               width = 0.1) +
+  labs(
+    y = "Average Investment",
+    x = "Treatment",
+    title = 'Avg Investment by Treatment',
+    subtitle = 'Error Bar= Standard Errors'
+  ) +
   theme_classic()
-
-bar.plot
 ```
-
 
 ## Replicating Figures 1-3
 
-Use `df_narrow` to recreate Figures 1-3. Your code should proceed as follows:
+Use `df_narrow` to recreate Figures 1-3.
+Your code should proceed as follows:
 
-* begin with the dataframe
-* then filter out observations you don't need for the plot at hand
-* then group observations by treatment and round 
-* then calculate the mean by treatment and round
-* then plot. 
+-   begin with the dataframe
+-   then filter out observations you don't need for the plot at hand
+-   then group observations by treatment and round
+-   then calculate the mean by treatment and round
+-   then plot.
 
-Each plot should be appropriately titled and axes should be appropriately labeled. Make sure the legend displays what you think it should. Use `theme_classic()` to display the plots. 
+Each plot should be appropriately titled and axes should be appropriately labeled.
+Make sure the legend displays what you think it should.
+Use `theme_classic()` to display the plots.
 
 **13. Recreate Figure 1 and assign it to an object `p1`.**
+
 ```{r}
-teams_vs_indiv=
-  df_narrow %>% 
-   filter(treatment==c('INDIVIDUALS', 'TEAMS'))%>% 
-  group_by(treatment, rounds)%>% 
-  summarize(average=mean(investment))  
-teams_vs_indiv
+p1 <-
+  df_narrow %>%
+  filter(treatment == c("INDIVIDUALS", "TEAMS")) %>%
+  group_by(treatment, rounds) %>%
+  summarize(average = mean(investment)) %>%
+  ggplot(., aes(x = rounds, y = average, group = treatment)) +
+  geom_line(aes(color = treatment)) +
+  geom_point(aes(shape = treatment, color = treatment), size = 4) +
+  scale_shape_manual(values = c(17, 19)) +
+  ylim(20, 100) +
+  theme_classic() +
+  theme(legend.position = "top")
 
-
-
-
-p1= ggplot(teams_vs_indiv, aes(x=rounds, y=average, group=treatment)) +
-  geom_line(aes(color=treatment))+
-  geom_point(aes(shape=treatment, color=treatment), size=4)+
-  scale_shape_manual(values=c(17,19))+
-  ylim(20,100)+
-  theme_classic()+
-  theme(legend.position="top")
 p1
- 
-
-  
 
 ```
-
 
 **14. Recreate Figure 2 and assign it to an object `p2`.**
 
 ```{r}
-paycomm_vs_message=
-  df_narrow %>% 
-   filter(treatment==c('MESSAGE','PAY-COMM')) %>% 
-  group_by(treatment,rounds)%>% 
-  summarize(average=mean(investment))  
+paycomm_vs_message <-
+  df_narrow %>%
+  filter(treatment %in% c("MESSAGE", "PAY-COMM")) %>%
+  group_by(treatment, rounds) %>%
+  summarize(average = mean(investment))
 paycomm_vs_message
 
-individual=
-  df_narrow %>% 
-   filter(treatment==c('INDIVIDUALS'))%>% 
-  group_by(treatment, rounds)%>% 
-  summarize(average=mean(investment))
+individual <-
+  df_narrow %>%
+  filter(treatment == 'INDIVIDUALS') %>%
+  group_by(treatment, rounds) %>%
+  summarize(average = mean(investment))
 
-paycomm_vs_message_vs_indiv=rbind(paycomm_vs_message, individual)
+paycomm_vs_message_vs_indiv <- rbind(paycomm_vs_message, individual)
 paycomm_vs_message_vs_indiv
 
-p2= ggplot(paycomm_vs_message_vs_indiv, aes(x=rounds, y=average, group=treatment)) +
-  geom_line(aes(color=treatment))+
-  geom_point(aes(shape=treatment, color=treatment), size=4) +
-  scale_shape_manual(values=c(17,15,19))+
-  ylim(20,100)+
+p2 <- ggplot(paycomm_vs_message_vs_indiv,
+             aes(x = rounds, y = average, group = treatment)) +
+  geom_line(aes(color = treatment)) +
+  geom_point(aes(shape = treatment, color = treatment), size = 4) +
+  scale_shape_manual(values = c(17, 15, 19)) +
+  ylim(20, 100) +
   theme_classic()
-  theme(legend.position="top")
+theme(legend.position = "top")
+
 p2
-
-
-
 ```
 
-   **15. Recreate Figure 3 and assign it to an object `p3`.**
+**15. Recreate Figure 3 and assign it to an object `p3`.**
+
 ```{r}
-mixed_vs_indiv=
-  df_narrow %>% 
-   filter(treatment==c('INDIVIDUALS', 'MIXED'))%>% 
-  group_by(treatment, rounds)%>% 
-  summarize(average=mean(investment))  
-mixed_vs_indiv
-
-
-
-
-p3= ggplot(mixed_vs_indiv, aes(x=rounds, y=average, group=treatment)) +
-  geom_line(aes(linetype=treatment, color=treatment))+
-  geom_point(aes(shape=treatment, color=treatment), size=4)+
-  scale_shape_manual(values=c(17,19))+
-  ylim(20,100)+
-  theme_classic()+
-  theme(legend.position="top")
+p3 <-
+  df_narrow %>%
+  filter(treatment == c('INDIVIDUALS', 'MIXED')) %>%
+  group_by(treatment, rounds) %>%
+  summarize(average = mean(investment)) %>% 
+  ggplot(., aes(x = rounds, y = average, group = treatment)) +
+  geom_line(aes(linetype = treatment, color = treatment)) +
+  geom_point(aes(shape = treatment, color = treatment), size = 4) +
+  scale_shape_manual(values = c(17, 19)) +
+  ylim(20, 100) +
+  theme_classic() +
+  theme(legend.position = "top")
 p3
 ```
-   
-  
-  **16. Use `cowplot()` to combine the three plots into one figure. There should be one row and three columns and each plot should be labeled with a letter (first one "a", second one "b", third on "c").**
+
+**16. Use `cowplot()` to combine the three plots into one figure. There should be one row and three columns and each plot should be labeled with a letter (first one "a", second one "b", third on "c").**
+
 ```{r}
-require(cowplot)
-cowplot::plot_grid(p1, p2, p3, labels="auto")
+cowplot::plot_grid(p1, p2, p3, labels = "auto")
 ```
-  
 
 # Inference
 
 **17. The paper uses Wilcoxon or Man-Whitney U-tests to check for average treatment effects. This test is similar to a t-test but with some key differences. Summarize these differences. Make sure to compare and contrast and the null hypotheses of each test.**
-The first difference between the two is that a t-test makes three assumptions:
-  1. The two samples are independent of one another
-  2. The two populations have equal variance or spread
-  3. The two populations are normally distributed
-A Wilcoxon test only assumes the first two. Additionally, because the Wilcoxon Rank Sum Test does not assume known distributions, it is appropriate to call it a non-parametric test, since distributions are distinguished by their paramters. This is further showcased in the differences between the null and alternative hypothesies of the tests.
-  t-test
-    H0: μ = m0 
-    H1: μ ≠ m0. 
-    
-  Wilcoxon.
-     H0: median1 = median2
-     H1: median1 ≠ median2.
-     
-The null hypothesis of the two-sample t test is equal means, the null hypothesis of the Wilcoxon test is  equal medians. This imlies, since the test is non-parametric, the null is that the two populations have the same distribution with the same median. If we reject the null, that means we have evidence that one distribution is shifted to the left or right of the other
 
+The critical difference between the two is that a t-test is a comparison of means, as can be seen in the null and alternative hypotheses :
+
+-   $H_0: \mu = m_0$
+-   $H_0: \mu \neq m_0$
+
+The Wilcoxon test is a measure of the overall difference in distributions.
+Specifically it checks the likelihood that an observation drawn from one distribution will be higher (or lower) than an observation drawn from the other distribution
 
 **18. When conducting these tests, the authors first calculate the average decision of each subject across rounds. This implies the authors do not want to treat subject decisions as independent across rounds. Why?**
-The authors do not want to treat the subjects choices as independent across rounds, to account for the fact that even though the budget is reestablished at the begining of a given round, past performace may influence an individuals choice. 
+
+The authors do not want to treat the subjects choices as independent across rounds, to account for the fact that even though the budget is reestablished at the beginning of a given round, past performance may influence an individuals choice.
 
 **19. Create a dataframe frame of subject/team averages across treatments. Call this dataframe `df_team_avg`. It should have 162 rows.**
 
 ```{r}
-df_team_avg<-
-  df_narrow %>% 
-  group_by(treatment, uniqueteam)%>%
-  summarise(mean=mean(investment))
-  df_team_avg
-  
-  df_team_avg$mean=as.integer(df_team_avg$mean)
-  df_team_avg
+df_team_avg <-
+  df_narrow %>%
+  group_by(treatment, uniqueteam) %>%
+  summarise(mean = mean(investment))
 
+nrow(df_team_avg)
 ```
 
-
-  
-  
-  
-  
-
-
-
-**20. Recreate Result 1 (significant difference between treatments INDIVIDUALS and TEAMS, $N=92$).**
+**20. Recreate Result 1 (significant difference between treatments INDIVIDUALS and TEAMS,** $N=92$).
 
 ```{r}
-df_team_avg_result1=
-  df_team_avg %>% 
-  filter(treatment=='INDIVIDUALS' | treatment=='TEAMS')
-  
+df_team_avg_result1 <-
+  df_team_avg %>%
+  filter(treatment == "INDIVIDUALS" | treatment == "TEAMS")
+
 df_team_avg_result1
- 
-  
-wilcox.test(df_team_avg_result1$mean~df_team_avg_result1$treatment)
-  
 
-
+wilcox.test(df_team_avg_result1$mean ~ df_team_avg_result1$treatment)
 
 ```
 
-**21. Recreate Result 2 (significant difference between INDIVIDUALS and PAY-COMM, $N=82$; significant difference between PAY-COMM and MESSAGE, $N=42$; no signfiicant difference between TEAMS and MESSAGE, $N=52$; no significant difference between TEAMS and PAY-COMM, $N=46$).**
+**21. Recreate Result 2 (significant difference between INDIVIDUALS and PAY-COMM,** $N=82$; significant difference between PAY-COMM and MESSAGE, $N=42$; no signfiicant difference between TEAMS and MESSAGE, $N=52$; no significant difference between TEAMS and PAY-COMM, $N=46$).
 
 ```{r}
 # your code here
-df_team_avg_result2a=
-  df_team_avg %>% 
-  filter(treatment=='INDIVIDUALS' | treatment=='PAY-COMM')
-df_team_avg_result2a
+df_team_avg_result2a <-
+  df_team_avg %>%
+  filter(treatment == "INDIVIDUALS" | treatment == "PAY-COMM")
 
 
-wilcox.test(df_team_avg_result2a$mean~df_team_avg_result2a$treatment, mu=0, paired=F)
 
-#Reject H0, signifigant difference between both groups. 
+wilcox.test(
+  df_team_avg_result2a$mean ~ df_team_avg_result2a$treatment,
+  mu = 0,
+  paired = F
+)
+
+df_team_avg_result2b <-
+  df_team_avg %>%
+  filter(treatment == "PAY-COMM" | treatment == "MESSAGE")
+
+
+
+wilcox.test(
+  df_team_avg_result2b$mean ~ df_team_avg_result2b$treatment,
+  mu = 0,
+  paired = F
+)
+
+df_team_avg_result2c <-
+  df_team_avg %>%
+  filter(treatment == "TEAMS" | treatment == "MESSAGE")
+
+
+
+wilcox.test(
+  df_team_avg_result2c$mean ~ df_team_avg_result2c$treatment,
+  mu = 0,
+  paired = F
+)
+
+df_team_avg_result2d <-
+  df_team_avg %>%
+  filter(treatment == "TEAMS" | treatment == "PAY-COMM")
+
+
+
+wilcox.test(
+  df_team_avg_result2d$mean ~ df_team_avg_result2d$treatment,
+  mu = 0,
+  paired = F
+)
 ```
 
-```{r}
-df_team_avg_result2b=
-  df_team_avg %>% 
-  filter(treatment=='PAY-COMM' | treatment=='MESSAGE')
-df_team_avg_result2b
-
-
-wilcox.test(df_team_avg_result2b$mean~df_team_avg_result2b$treatment, mu=0, paired=F)
-#Reject H0, signifigant difference between both groups.
-```
-
-```{r}
-df_team_avg_result2c=
-  df_team_avg %>% 
-  filter(treatment=='TEAMS' | treatment=='MESSAGE')
-df_team_avg_result2c
-
-
-wilcox.test(df_team_avg_result2c$mean~df_team_avg_result2c$treatment, mu=0, paired=F)
-#Do Not Reject H0, no signifigant difference between both groups.
-```
-
-```{r}
-df_team_avg_result2d=
-  df_team_avg %>% 
-  filter(treatment=='TEAMS' | treatment=='PAY-COMM')
-df_team_avg_result2d
-
-
-wilcox.test(df_team_avg_result2d$mean~df_team_avg_result2d$treatment, mu=0, paired=F)
-#Do Not Reject H0, no signifigant difference between both groups.
-```
-
-
-
-
-**22. Use `df_narrow` to run the follow regression: $y_{it} = \beta_0 + \beta_1T_i + \varepsilon_{it}$ where $y_{it}$ is the decision of subject $i$ in round $t$ and $T_i$ is her treatment. INDIVIDUALS should be the base treatment. Assign the regression to object `m` and then print the output using `summary(m)`.**
+**22. Use `df_narrow` to run the follow regression:** $y_{it} = \beta_0 + \beta_1T_i + \varepsilon_{it}$ where $y_{it}$ is the decision of subject $i$ in round $t$ and $T_i$ is her treatment.
+INDIVIDUALS should be the base treatment.
+Assign the regression to object `m` and then print the output using `summary(m)`.
 
 ```{r}
 # your code here
-m=lm(df_narrow$investment~df_narrow$treatment)
+m <- lm(investment ~ treatment, data = df_narrow)
+
 summary(m)
 ```
 
 **23. Interpret the results. (Hint: what is the hypothesis test on each coefficient?)**
 
-The results of the model appear promising. The model is signifigant, as the pvalue of the test statistic is <.05. With the baseline group neing INDIVIDUALS, we can determine that the intercept term is the average that INDIVIDUALS invested in the game. This is signifigant as the pvalue of intercept is highly signifigant (pvalue<.001). From the baseline we can determine that each slope coeficent of each dummy variable is equivelent to the euro-cent increase in investment in a given round by a given subject in a respective treatment. For example, we can determine that those members in the MESSAGE treatment on average invest 22 more eurocents than those in individuals in a given round by a given subject in the treatment group, for an average of 61.4 eurocents. Furthermore, subjects in MIXED invested 10.6 more eurocents than INDIVIDUALS, PAY-COM 10.9 more eurocents, and finally TEAMS invested 16.3 more eurocents than individuals. The hypothesis test for the slope coefficents are:
-H0: β=0
-HA: β≠0
+The results of the model appear promising.
+The model is significant, as the pvalue of the test statistic is \<.05.
+With the baseline group being INDIVIDUALS, we can determine that the intercept term is the average that INDIVIDUALS invested in the game.
+This is significant as the pvalue of intercept is highly significant (pvalue\<.001).
+From the baseline we can determine that each slope coefficient of each dummy variable is equivalent to the euro-cent increase in investment in a given round by a given subject in a respective treatment.
+For example, we can determine that those members in the MESSAGE treatment on average invest 22 more eurocents than those in individuals in a given round by a given subject in the treatment group, for an average of 61.4 eurocents.
+Furthermore, subjects in MIXED invested 10.6 more eurocents than INDIVIDUALS, PAY-COM 10.9 more eurocents, and finally TEAMS invested 16.3 more eurocents than individuals.
+The hypothesis test for the slope coefficients are: H0: β=0 HA: β≠0
 
-All of the β's are signifigant, thus statistically not equal to zero. Therefore the increase in investment seen from INDIVIDUALS to any of the treatment groups are signifigant.
+All of the β's are significant, thus statistically not equal to zero.
+Therefore the increase in investment seen from INDIVIDUALS to any of the treatment groups are significant.
 
 **24. Now cluster the standard errors at the subject level. First create a new variance-covariance matrix called `vcov_subjectid`, then pass it to [`coeftest()`](https://www.rdocumentation.org/packages/lmtest/versions/0.9-37/topics/coeftest) to calculate the new standard errors, t-statistics and p-values.**
 
 ```{r}
-vcov_subjectid <- sandwich::vcovCL(m,cluster = df_narrow$subject)
+vcov_subjectid <- sandwich::vcovCL(m, cluster = df_narrow$subject)
+
 lmtest::coeftest(m, vcov_subjectid)
 ```
+
 **25. Why bother clustering standard errors?**
-When obssrvations are related to one another in a data set, clustering of standard errors can occur. Because of this, violations of asumption of independence of observations occurs, resulting in the possibility of commiting a Type I or II error. This is because standard errors that are smaller than regular OLS standard error are observed, resulting in confidence intervals that are too small. This disrupts the calculation of T-statistics that are too large, resulting in p-values That are too small. Evidence of this can be seen between the model summaries in questions 22 and 24. The standard errors grew from 22 to 24 after accounting for clustered standard erros, resulting in all of the treatment groups to be signifigant at the 1% level rather than the .1% level. In this instance it is some what inconsequential, but in other models, it could result in a slope coefiicent being signifigant when it should not be, which is problematic. 
+
+When observations are related to one another in a data set, clustering of standard errors can occur.
+Because of this, violations of assumption of independence of observations occurs.
+This increases the probability of committing a Type I error, or in other words rejecting $H_0$ when it should not be rejected.
+This is because standard errors that are smaller than regular OLS standard errors are observed, resulting in confidence intervals that are too small.
+This disrupts the calculation of T-statistics that are too large, resulting in p-values That are too small.
+Evidence of this can be seen between the model summaries in questions 22 and 24.
+The standard errors grew from 22 to 24 after accounting for clustered standard errors, resulting in all of the treatment groups to be significant at the 1% level rather than the .1% level.
+In this instance it is some what inconsequential, but in other models, it could result in a slope coefficient being significant when it should not be, which is problematic in inferential statistics.
