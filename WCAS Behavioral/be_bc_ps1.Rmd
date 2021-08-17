@@ -19,6 +19,7 @@ editor_options:
 
 ```{r setup, results='hide', message=FALSE, warning=FALSE}
 library(dplyr)
+library(ggplot2)
 library(tidyr)
 library(cowplot)
 library(sandwich)
@@ -83,7 +84,7 @@ Furthermore, there need not be an outgroup, nor a strategic setting for this beh
 The second finding of the paper is that there is no distinguishable difference between team decision making, and that of an individual who is a member of a salient group.
 The final result of this paper is that the experience of making decisions within the confines of a team affects decisions an individual makes outside of these confines, or on his/her own.
 
-**5. Why are these results valuable? What have we learned? Motivate your discussion with a real-world example.** 
+**5. Why are these results valuable? What have we learned? Motivate your discussion with a real-world example.**
 
 These results are valuable because they give very important insight into the way humans behave than is accounted for in neoclassical economic models.
 Essentially, group membership, whether it be mere membership or parameterized within a team, changes the choices people make.
@@ -96,7 +97,7 @@ We can gain insight to the fact that people will consider their families, groups
 
 **6. Import the data into a dataframe object called `df`, then convert all the column names to lowercase.**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # your code here
 df <-
   read.csv("C:/Users/jawilliams/Documents/WCAS/WCAS Behavioral/Data/sutterexperiment.csv")
@@ -109,7 +110,7 @@ names(df)
 
 **7. Create a variable called "uniquesubject" that contains unique subject identifiers. Use [`mutate()`](https://dplyr.tidyverse.org/reference/mutate.html) and [`paste()`](https://stat.ethz.ch/R-manual/R-devel/library/base/html/paste.html). (Hint: what variables do you need to "paste" together to ensure each subject is uniquely identified?)**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # your code here
 df <-
   df %>%
@@ -119,7 +120,7 @@ df <-
 
 **8. Similarly, create a variable called "uniqueteam" that contains unique team identifiers. Do it so that the variable has the same values as `subjectid` for all subjects in the INDIVIDUALS treatment.**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 df <-
   df %>%
   mutate(uniqueteam = paste(session, team, sep = "_"))
@@ -132,20 +133,22 @@ df$uniqueteam <-
 
 I have updated the code in this question to use `tidyr::pivot_longer` as `tidyr::gather` is deprecated.
 
-```{r echo=TRUE}
+```{r message=FALSE, warning=FALSE}
 # your code here
 df_narrow <- df %>%
-  pivot_longer(c(r1:r9), 
+  pivot_longer(c(r1:r9),
                names_to = "rounds",
                values_to = "investment") %>%
-  arrange(session, subject, treatment, team) 
+  arrange(session, subject, treatment, team)
 
-kable(head(df_narrow))
+kable(head(df_narrow),
+      align = "c") %>%
+  column_spec(column = c(1, 2, 7, 8), width = ".75in")
 ```
 
 **10. Notice that all the values for the variable `round` are prepended with "r". Remove it using [`gsub()`](https://astrostatistics.psu.edu/su07/R/html/base/html/grep.html).**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 df_narrow$rounds <- gsub("r", " ", df_narrow$rounds)
 
 unique(df_narrow$rounds)
@@ -161,23 +164,25 @@ unique(df_narrow$rounds)
 
 **11. Use `df_narrow` a summary table of mean outcomes and standard deviations by treatment. (Do not create a separate dataframe.)**
 
-```{r}
+```{r echo=TRUE, message=TRUE, warning=TRUE}
 # your code here
 df_narrow %>%
+  select(investment, treatment) %>% 
   group_by(treatment) %>%
-  select(subject, team, investment) %>%
-  summarise_all(funs(mean, sd)) %>% 
-  kable()
+  summarise_all(list(~ mean(., na_rm = TRUE), ~ sd(., na.rm = TRUE)),
+                .groups = "keep") %>%
+  na.omit() %>% 
+  kable(., align = "c")
 
 ```
 
 **12. Create a bar plot that displays the mean of each treatment and error bars that display the standard errors of the means. Color each bar gray. Make sure to title the axes and the plot. The subtitle should tell the reader the error bars display the standard error of the mean. Use `theme_classic()` to display the plot.**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 df_narrow %>%
   group_by(treatment) %>%
   ggplot(., aes(treatment, investment, fill = treatment)) +
-  stat_summary(fun.y = mean, geom = "bar", fill = "gray69") +
+  stat_summary(fun = mean, geom = "bar", fill = "gray69") +
   stat_summary(fun.data = mean_se,
                geom = "errorbar",
                width = 0.1) +
@@ -207,7 +212,7 @@ Use `theme_classic()` to display the plots.
 
 **13. Recreate Figure 1 and assign it to an object `p1`.**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 p1 <-
   df_narrow %>%
   filter(treatment == c("INDIVIDUALS", "TEAMS")) %>%
@@ -227,13 +232,12 @@ p1
 
 **14. Recreate Figure 2 and assign it to an object `p2`.**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 paycomm_vs_message <-
   df_narrow %>%
   filter(treatment %in% c("MESSAGE", "PAY-COMM")) %>%
   group_by(treatment, rounds) %>%
   summarize(average = mean(investment))
-paycomm_vs_message
 
 individual <-
   df_narrow %>%
@@ -242,7 +246,6 @@ individual <-
   summarize(average = mean(investment))
 
 paycomm_vs_message_vs_indiv <- rbind(paycomm_vs_message, individual)
-paycomm_vs_message_vs_indiv
 
 p2 <- ggplot(paycomm_vs_message_vs_indiv,
              aes(x = rounds, y = average, group = treatment)) +
@@ -258,10 +261,10 @@ p2
 
 **15. Recreate Figure 3 and assign it to an object `p3`.**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 p3 <-
   df_narrow %>%
-  filter(treatment == c('INDIVIDUALS', 'MIXED')) %>%
+  filter(treatment %in% c('INDIVIDUALS', 'MIXED')) %>%
   group_by(treatment, rounds) %>%
   summarize(average = mean(investment)) %>% 
   ggplot(., aes(x = rounds, y = average, group = treatment)) +
@@ -276,7 +279,7 @@ p3
 
 **16. Use `cowplot()` to combine the three plots into one figure. There should be one row and three columns and each plot should be labeled with a letter (first one "a", second one "b", third on "c").**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 cowplot::plot_grid(p1, p2, p3, labels = "auto")
 ```
 
@@ -298,23 +301,29 @@ The authors do not want to treat the subjects choices as independent across roun
 
 **19. Create a dataframe frame of subject/team averages across treatments. Call this dataframe `df_team_avg`. It should have 162 rows.**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 df_team_avg <-
   df_narrow %>%
   group_by(treatment, uniqueteam) %>%
-  summarise(mean = mean(investment))
+  summarise(mean = mean(investment, na.rm = TRUE),
+            .groups = "keep") %>% 
+  na.omit()
 
 nrow(df_team_avg)
 ```
 
 **20. Recreate Result 1 (significant difference between treatments INDIVIDUALS and TEAMS,** $N=92$).
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 df_team_avg_result1 <-
   df_team_avg %>%
   filter(treatment == "INDIVIDUALS" | treatment == "TEAMS")
 
-df_team_avg_result1
+print(paste(
+  "The sample size for the test between INDIVIDUALS and TEAMS is N = ",
+  nrow(df_team_avg_result1)
+))
+
 
 wilcox.test(df_team_avg_result1$mean ~ df_team_avg_result1$treatment)
 
@@ -322,13 +331,16 @@ wilcox.test(df_team_avg_result1$mean ~ df_team_avg_result1$treatment)
 
 **21. Recreate Result 2 (significant difference between INDIVIDUALS and PAY-COMM,** $N=82$; significant difference between PAY-COMM and MESSAGE, $N=42$; no signfiicant difference between TEAMS and MESSAGE, $N=52$; no significant difference between TEAMS and PAY-COMM, $N=46$).
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # your code here
 df_team_avg_result2a <-
   df_team_avg %>%
   filter(treatment == "INDIVIDUALS" | treatment == "PAY-COMM")
 
-
+print(paste(
+  "The sample size for the test between INDIVIDUALS and PAY-COMMS is N = ",
+  nrow(df_team_avg_result2a)
+))
 
 wilcox.test(
   df_team_avg_result2a$mean ~ df_team_avg_result2a$treatment,
@@ -340,7 +352,10 @@ df_team_avg_result2b <-
   df_team_avg %>%
   filter(treatment == "PAY-COMM" | treatment == "MESSAGE")
 
-
+print(paste(
+  "The sample size for the test between PAY-COMM and MESSAGE is N = ",
+  nrow(df_team_avg_result2b)
+))
 
 wilcox.test(
   df_team_avg_result2b$mean ~ df_team_avg_result2b$treatment,
@@ -352,7 +367,10 @@ df_team_avg_result2c <-
   df_team_avg %>%
   filter(treatment == "TEAMS" | treatment == "MESSAGE")
 
-
+print(paste(
+  "The sample size for the test between TEAMS and MESSAGE is N = ",
+  nrow(df_team_avg_result2c)
+))
 
 wilcox.test(
   df_team_avg_result2c$mean ~ df_team_avg_result2c$treatment,
@@ -364,7 +382,10 @@ df_team_avg_result2d <-
   df_team_avg %>%
   filter(treatment == "TEAMS" | treatment == "PAY-COMM")
 
-
+print(paste(
+  "The sample size for the test between TEAMS and PAYCOMM is N = ",
+  nrow(df_team_avg_result2d)
+))
 
 wilcox.test(
   df_team_avg_result2d$mean ~ df_team_avg_result2d$treatment,
@@ -377,7 +398,7 @@ wilcox.test(
 INDIVIDUALS should be the base treatment.
 Assign the regression to object `m` and then print the output using `summary(m)`.
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # your code here
 m <- lm(investment ~ treatment, data = df_narrow)
 
@@ -400,7 +421,7 @@ Therefore the increase in investment seen from INDIVIDUALS to any of the treatme
 
 **24. Now cluster the standard errors at the subject level. First create a new variance-covariance matrix called `vcov_subjectid`, then pass it to [`coeftest()`](https://www.rdocumentation.org/packages/lmtest/versions/0.9-37/topics/coeftest) to calculate the new standard errors, t-statistics and p-values.**
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 vcov_subjectid <- sandwich::vcovCL(m, cluster = df_narrow$subject)
 
 lmtest::coeftest(m, vcov_subjectid)

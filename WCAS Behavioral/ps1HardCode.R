@@ -35,8 +35,8 @@ head(df_narrow)
 #### Q 11
 
 df_narrow %>%
+  select(subject, team, investment, treatment) %>% 
   group_by(treatment) %>%
-  select(subject, team, investment) %>%
   summarise_all(funs(mean, sd))
 
 #### Q 12
