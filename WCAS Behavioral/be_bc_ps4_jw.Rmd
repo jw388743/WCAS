@@ -15,22 +15,13 @@ number_sections: TRUE
 </p>
 
 ```{r setup, results='hide', message=FALSE, warning=FALSE}
-library(tidyverse)
+library(dplyr)
+library(tidyr)
 library(cowplot)
 library(kableExtra)
 library(margins)
 ```
 
-You may need to update your version of R and follow these steps to download [`margins`](https://github.com/leeper/margins):
-
-```{r,eval=F}
-if (!require("remotes")) {
-  install.packages("remotes")
-  library("remotes")
-}
-install_github("leeper/prediction")
-install_github("leeper/margins")
-```
 
 In this problem set you will summarize the paper ["Imperfect Public Monitoring with Costly Punishment: An Experimental Study"](https://www.aeaweb.org/articles?id=10.1257/aer.102.7.3317) (Ambrus and Greiner, AER 2012) and recreate some of its findings. 
 
@@ -82,14 +73,14 @@ $$
 The figure below represents how increases in the total donation to the public group decrease individual payoffs. 
 
 ```{r}
-pi<- function(x,y,e=20,alpha=.4){
-  private=e-x
-  tot_contrib=x+y
-  pay_pg=alpha*tot_contrib
-  pay_me=private+pay_pg
+pi <- function(x, y, e = 20, alpha = .4) {
+  private <- e - x
+  tot_contrib <- x + y
+  pay_pg <- alpha * tot_contrib
+  pay_me <- private + pay_pg
   return(pay_me)
 }
-curve(pi(x,y=3*20),from = 0,to= 20)
+curve(pi(x, y = (3 * 20)), from = 0, to = 20)
 ```
 
 
@@ -106,153 +97,235 @@ curve(pi(x,y=3*20),from = 0,to= 20)
 First I am going to add columns for the two treatment types as names that are not coded. So for noise I will change all 0's to No Noise, and 1s to Noise. For Punishment type, I am going to create a column that changes all 1s in p_reg to Regular Punishment, all 1s in p_strong to Strong Punishment, and 0s in p_strong to No Punishment. I decided to do this to make the tables more professional, rather than grouping by the provided columns of treatment and noise which had encoded factor names, and 1s and 0s
 
 ```{r}
-df=read_csv('ps4_data.csv')
-df<- df %>% 
-  mutate(p_treat=if_else(p_reg==1, 'Regular Punishment', ifelse(p_strong==1, 'Strong Punishment', 'No Punishment'))) %>% 
-  mutate(noise_treat= ifelse(noise==0,'No Noise','Noise'))
- 
-df2<- 
-  df%>% 
-  group_by(noise_treat,p_treat) %>%
-  summarise(N_participants= length(subject)/50, Avg_contribution=round(mean(contribution), digits = 2), Avg_punishmnet=round(mean(received_punishment), digits = 2), Avg_net_profit=round(mean(income), digits=2))
+df <- read_csv('ps4_data.csv')
+df <- df %>%
+  mutate(p_treat = if_else(
+    p_reg == 1,
+    "Regular Punishment",
+    ifelse(p_strong == 1, "Strong Punishment", "No Punishment")
+  )) %>%
+  mutate(noise_treat = ifelse(noise == 0, "No Noise", "Noise"))
 
-df_kable<- 
-   kable(df2, align = 'c') %>% 
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed"),full_width = TRUE) %>% 
-   collapse_rows(columns=1, valign='top')
-df_kable
+df %>%
+  group_by(noise_treat, p_treat) %>%
+  summarise(
+    N_participants = length(subject) / 50,
+    Avg_contribution = round(mean(contribution), digits = 2),
+    Avg_punishmnet = round(mean(received_punishment), digits = 2),
+    Avg_net_profit = round(mean(income), digits = 2)
+  ) %>%
+  kable(., align = 'c') %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = TRUE
+  ) %>%
+  collapse_rows(columns = 1, valign = 'top')
 ```
 
 
-
-
-  
 **8. Recreate Figure 1.**
 
 ```{r}
-fig1= 
-  df %>% 
-  mutate(noise= ifelse(noise==0,'No Noise','Noise')) %>%
-  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
-  select(noise,round_fct, p_treat, contribution) %>% 
-  group_by(round_fct, p_treat ,noise) %>% 
-  summarize(contrib=mean(contribution))%>% 
-  ggplot(.,aes(x=round_fct, y=contrib, group=p_treat, shape=p_treat, color=p_treat)) +
-  geom_line()+
-  geom_point()+
-  facet_grid(cols = vars(noise))+
-  labs(caption='Fig 1. Contributions Over Time')+
-  scale_y_continuous(breaks=c(0,2,4,6,8,10,12,14,16,18,20),limits=c(0,20))+
+fig1 <-
+  df %>%
+  mutate(noise = ifelse(noise == 0, "No Noise", "Noise")) %>%
+  mutate(round_fct = cut(
+    x = round,
+    breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+  )) %>%
+  select(noise, round_fct, p_treat, contribution) %>%
+  group_by(round_fct, p_treat , noise) %>%
+  summarize(contrib = mean(contribution)) %>%
+  ggplot(.,
+         aes(
+           x = round_fct,
+           y = contrib,
+           group = p_treat,
+           shape = p_treat,
+           color = p_treat
+         )) +
+  geom_line() +
+  geom_point() +
+  facet_grid(cols = vars(noise)) +
+  labs(caption = "Fig 1. Contributions Over Time") +
+  scale_y_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20),
+                     limits = c(0, 20)) +
   theme(
-  plot.caption =element_text(hjust = .5, size=12, face = 'bold'),
-  axis.title.x = element_blank(),
-  axis.title.y = element_blank(),
-  legend.position="bottom")
+    plot.caption = element_text(hjust = .5, size = 12, face = "bold"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom"
+  )
+
 fig1
 ```
 
 **9. Recreate Figure 2.**
 
 ```{r}
-fig2<-
-  df %>% 
-  mutate(noise= ifelse(noise==0,'No Noise','Noise')) %>%
-  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
-  select(noise,round_fct, p_treat, income) %>% 
-  group_by(round_fct, p_treat ,noise) %>% 
-  summarize(net_profit=mean(income))%>% 
-  ggplot(.,aes(x=round_fct, y=net_profit, group=p_treat, shape=p_treat, color=p_treat))+
+fig2 <-
+  df %>%
+  mutate(noise = ifelse(noise == 0, "No Noise", "Noise")) %>%
+  mutate(round_fct = cut(
+    x = round,
+    breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+  )) %>%
+  select(noise, round_fct, p_treat, income) %>%
+  group_by(round_fct, p_treat , noise) %>%
+  summarize(net_profit = mean(income)) %>%
+  ggplot(.,
+         aes(
+           x = round_fct,
+           y = net_profit,
+           group = p_treat,
+           shape = p_treat,
+           color = p_treat
+         )) +
   geom_point() +
-  geom_line()+
-  facet_grid(cols = vars(noise))+
-  labs(caption='Fig 2. Net Profits Over Time')+
-  scale_y_continuous(breaks=c(16,18,20,22,24,26,28,30),limits=c(15,30))+
+  geom_line() +
+  facet_grid(cols = vars(noise)) +
+  labs(caption = "Fig 2. Net Profits Over Time") +
+  scale_y_continuous(breaks = c(16, 18, 20, 22, 24, 26, 28, 30),
+                     limits = c(15, 30)) +
   theme(
-  plot.caption =element_text(hjust = .5, size=12, face = 'bold'),
-  axis.title.x = element_blank(),
-  axis.title.y = element_blank(),
-  legend.position="bottom")
+    plot.caption = element_text(hjust = .5, size = 12, face = "bold"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "bottom"
+  )
 fig2
 ```
 
 **10. Recreate Figure 4.**
 
 ```{r}
-df<-df %>%
-  mutate(group_cntrb=(ifelse(sum_group_contributions==0, 'No contribution', 
-                                      ifelse(sum_group_contributions==60, "All contribute", 'Some contribute'))))
-df$group_cntrb = factor(df$group_cntrb,levels=c("All contribute", 'Some contribute','No contribution'))
+df <- df %>%
+  mutate(group_cntrb = (
+    ifelse(
+      sum_group_contributions == 0,
+      "No contribution",
+      ifelse(
+        sum_group_contributions == 60,
+        "All contribute",
+        "Some contribute"
+      )
+    )
+  ))
 
-pun_no_noise_area<- 
-  df %>% 
-  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
-  group_by(noise_treat, round_fct, group_cntrb,p_treat) %>% 
-  filter(treat=='pun_nonoise') %>% 
-  summarise(n_groups=n()) %>% 
-  summarise(n=sum(n_groups)) %>% 
-  mutate(percent=n/sum(n)) %>% 
-  ggplot(., aes(x=round_fct, y=percent,group=group_cntrb,fill=group_cntrb))+
-  geom_area()+
-  ggtitle('Punishmnet, no noise')+
-  labs(x='Period',y='Share')+
-  scale_y_continuous(breaks=c(0,.2,.4,.6,.8,1),limits=c(0,1))+
+df$group_cntrb <-
+  factor(df$group_cntrb,
+         levels = c("All contribute", 'Some contribute', 'No contribution'))
+
+pun_no_noise_area <-
+  df %>%
+  mutate(round_fct = cut(
+    x = round,
+    breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+  )) %>%
+  group_by(noise_treat, round_fct, group_cntrb, p_treat) %>%
+  filter(treat == "pun_nonoise") %>%
+  summarise(n_groups = n()) %>%
+  summarise(n = sum(n_groups)) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(.,
+         aes(
+           x = round_fct,
+           y = percent,
+           group = group_cntrb,
+           fill = group_cntrb
+         )) +
+  geom_area() +
+  ggtitle("Punishmnet, no noise") +
+  labs(x = "Period", y = "Share") +
+  scale_y_continuous(breaks = c(0, .2, .4, .6, .8, 1), limits = c(0, 1)) +
   theme_classic()
 
-pun_noise_area<- 
-  df %>% 
-  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
-  group_by(noise_treat, round_fct, group_cntrb,p_treat) %>% 
-  filter(treat=='pun_noise') %>% 
-  summarise(n_groups=n()) %>% 
-  summarise(n=sum(n_groups)) %>% 
-  mutate(percent=n/sum(n)) %>% 
-  ggplot(., aes(x=round_fct, y=percent,group=group_cntrb,fill=group_cntrb))+
-  geom_area()+
-  ggtitle('Punishmnet, noise')+
-  labs(x='Period',y='Share')+
-  scale_y_continuous(breaks=c(0,.2,.4,.6,.8,1),limits=c(0,1))+
+pun_noise_area <-
+  df %>%
+  mutate(round_fct = cut(
+    x = round,
+    breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+  )) %>%
+  group_by(noise_treat, round_fct, group_cntrb, p_treat) %>%
+  filter(treat == "pun_noise") %>%
+  summarise(n_groups = n()) %>%
+  summarise(n = sum(n_groups)) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(.,
+         aes(
+           x = round_fct,
+           y = percent,
+           group = group_cntrb,
+           fill = group_cntrb
+         )) +
+  geom_area() +
+  ggtitle("Punishmnet, noise") +
+  labs(x = "Period", y = "Share") +
+  scale_y_continuous(breaks = c(0, .2, .4, .6, .8, 1), limits = c(0, 1)) +
   theme_classic()
 
-strg_pun_no_noise_area<- 
-  df %>% 
-  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
-  group_by(noise_treat, round_fct, group_cntrb,p_treat) %>% 
-  filter(treat=='strongpun_nonoise') %>%
-  summarise(n_groups=n()) %>% 
-  summarise(n=sum(n_groups)) %>% 
-  mutate(percent=n/sum(n)) %>% 
-  ggplot(., aes(x=round_fct, y=percent,group=group_cntrb,fill=group_cntrb))+
-  geom_area()+
-  ggtitle('Strong Punishmnet, no noise')+
-  labs(x='Period',y='Share')+
-  scale_y_continuous(breaks=c(0,.2,.4,.6,.8,1),limits=c(0,1))+
+strg_pun_no_noise_area <-
+  df %>%
+  mutate(round_fct = cut(
+    x = round,
+    breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+  )) %>%
+  group_by(noise_treat, round_fct, group_cntrb, p_treat) %>%
+  filter(treat == "strongpun_nonoise") %>%
+  summarise(n_groups = n()) %>%
+  summarise(n = sum(n_groups)) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(.,
+         aes(
+           x = round_fct,
+           y = percent,
+           group = group_cntrb,
+           fill = group_cntrb
+         )) +
+  geom_area() +
+  ggtitle("Strong Punishmnet, no noise") +
+  labs(x = "Period", y = "Share") +
+  scale_y_continuous(breaks = c(0, .2, .4, .6, .8, 1), limits = c(0, 1)) +
   theme_classic()
 
-strg_pun_noise_area<- 
-  df %>% 
-  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
-  group_by(noise_treat, round_fct, group_cntrb,p_treat) %>% 
-  filter(treat=='strongpun_noise') %>%
-  summarise(n_groups=n()) %>% 
-  summarise(n=sum(n_groups)) %>% 
-  mutate(percent=n/sum(n)) %>% 
-  ggplot(., aes(x=round_fct, y=percent,group=group_cntrb,fill=group_cntrb))+
-  geom_area()+
-  ggtitle('Strong Punishmnet, noise')+
-  labs(x='Period',y='Share')+
-  scale_y_continuous(breaks=c(0,.2,.4,.6,.8,1),limits=c(0,1))+
+strg_pun_noise_area <-
+  df %>%
+  mutate(round_fct = cut(
+    x = round,
+    breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+  )) %>%
+  group_by(noise_treat, round_fct, group_cntrb, p_treat) %>%
+  filter(treat == "strongpun_noise") %>%
+  summarise(n_groups = n()) %>%
+  summarise(n = sum(n_groups)) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(.,
+         aes(
+           x = round_fct,
+           y = percent,
+           group = group_cntrb,
+           fill = group_cntrb
+         )) +
+  geom_area() +
+  ggtitle("Strong Punishmnet, noise") +
+  labs(x = "Period", y = "Share") +
+  scale_y_continuous(breaks = c(0, .2, .4, .6, .8, 1), limits = c(0, 1)) +
   theme_classic()
 
-pun_no_noise_line<- 
-  df %>% 
-  mutate(round_fct=cut(x = round, breaks = c(0,5,10,15,20,25,30,35,40,45,50))) %>%
-  group_by(noise_treat, round_fct, group_cntrb,treat) %>% 
-  filter(treat=='pun_noise') %>%
-  summarise(punish=mean(income_reduction)) %>% 
-  ggplot(., aes(x=round_fct, y=punish,group=group_cntrb))+
-  geom_line()+
-  labs(x='Period',y='Punishment')+
-  scale_y_continuous(breaks=c(0,.5,1,1.5,2,2.5),limits=c(0,2.5))
+pun_no_noise_line <-
+  df %>%
+  mutate(round_fct = cut(
+    x = round,
+    breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+  )) %>%
+  group_by(noise_treat, round_fct, group_cntrb, treat) %>%
+  filter(treat == "pun_noise") %>%
+  summarise(punish = mean(income_reduction)) %>%
+  ggplot(., aes(x = round_fct, y = punish, group = group_cntrb)) +
+  geom_line() +
+  labs(x = "Period", y = "Punishment") +
+  scale_y_continuous(breaks = c(0, .5, 1, 1.5, 2, 2.5),
+                     limits = c(0, 2.5))
 
 
 par(mfrow = c(1, 4))
@@ -307,10 +380,15 @@ $$
 **13. A probit model uses the Normal CDF $\Phi$ as the link function, where $\Phi' = \phi$ is the Normal PDF. Use `glm()` to estimate Model 1 in Table 2 (remember to cluster the standard errors at the group level). Assign the model to the object `m1`. Use `summary()` to view the coefficients. Interpret the coefficients. (For more on the probit model, see the appendix.)**
 
 ```{r}
-require(sandwich)
-m1 <- glm(contr_dummy~round+p_reg+p_strong+noise+noise__p_reg+noise__p_strong-1, data = df, family=binomial(link="probit"))#removed intercept since it was not in Table 2
+m1 <-
+  glm(
+    contr_dummy ~
+      round + p_reg + p_strong + noise + noise__p_reg + noise__p_strong,
+    data = df,
+    family = binomial(link = "probit")
+  )
 summary(m1)
-vcov_group<- sandwich::vcovCL(m1,cluster = df$group)
+vcov_group <- sandwich::vcovCL(m1, cluster = df$group)
 lmtest::coeftest(m1, vcov_group)
 ```
 
@@ -321,19 +399,19 @@ lmtest::coeftest(m1, vcov_group)
 $$\hat{\mathbf{X}\beta}$$. Hint: use the option `type="link"` in `predict()`.)** 
 
 ```{r}
-preds= predict(m1, df, type='link')
+preds <- predict(m1, df, type = "link")
 ```
 
 2. **Use [`dnorm()`](https://www.r-bloggers.com/normal-distribution-functions/) to calculate the probabilities of the predicted z-scores and store the output in an object called `index`.**
 
 ```{r}
-index<-dnorm(preds, mean=0,sd=1)
+index <- dnorm(preds, mean = 0, sd = 1)
 ```
 
 3. **Now calculate the marginal effects by multiplying the predicted probabilities times the estimated coefficient for `round` and store the output in `dydxround`.**
 
 ```{r}
-dxdyrnd=index*-.008
+dxdyrnd = index * -.008
 ```
 
 4. **Use `mean()` to calculate the AME.**
@@ -346,7 +424,7 @@ mean(dxdyrnd)
 **15. Verify your calculations with `margins()`, the plot the AMEs. (Note: these will not be exactly the same as those in the paper, since the paper uses an outdated method in Stata.**
 
 ```{r}
-m<- margins(m1)
+m <- margins(m1)
 m
 plot(m)
 ```
